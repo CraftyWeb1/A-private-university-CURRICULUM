@@ -29,7 +29,7 @@ export function Ring({ value, label }: { value: number; label: string }) {
         cy="40"
         r={r}
         fill="none"
-        stroke="#355744"
+        stroke="#c45c78"
         strokeWidth="6"
         strokeDasharray={c}
         strokeDashoffset={offset}

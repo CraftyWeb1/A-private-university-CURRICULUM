@@ -41,11 +41,11 @@ export function Layout({ path, children }: { path: Path; children: ReactNode }) 
         <a className="brand" href={href('')} onClick={() => setOpen(false)}>
           <span className="arab">دار العلم</span>
           <strong>Dar al-Ilm</strong>
-          <small>A personal university</small>
+          <small>a handmade university</small>
         </a>
         <nav className="nav" onClick={() => setOpen(false)}>
           <a className={active === 'home' ? 'active' : ''} href={href('')}>
-            The garden
+            The journal
           </a>
           <div className="nav-label">Schools</div>
           {store.schools.map((s) => (

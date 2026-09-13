@@ -27,13 +27,13 @@ export function Home() {
     <div>
       <section className="hero">
         <div>
-          <span className="kicker">A private university for a whole life</span>
+          <span className="kicker">stitched for a whole life</span>
           <div className="arab-hero">روضة العلم</div>
-          <h1>A garden, not a grind.</h1>
+          <h1>A scrapbook, not a grind.</h1>
           <p className="lede">
-            Click any name to rewrite it. Add a school, a course, a topic, a page. Switch List,
-            Board, Table, Gallery the way you would in Notion. Islam remains the foundation —
-            everything else you can reshape.
+            Pink pages, serious mind. Click anything and rewrite it. Add schools, courses, little
+            notes, washi-tape projects. Islam stays the foundation — the rest you collage into
+            the girl you are becoming.
           </p>
         </div>
         <aside className="manifesto">
