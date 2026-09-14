@@ -1,0 +1,16 @@
+{
+  "name": "Dar al-Ilm",
+  "short_name": "Dar al-Ilm",
+  "description": "A handmade university in the browser.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#5c2a3a",
+  "theme_color": "#5c2a3a",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
