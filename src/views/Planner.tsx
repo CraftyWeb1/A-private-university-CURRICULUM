@@ -87,6 +87,25 @@ function height(start: string, end: string) {
   return Math.max(22, (minutes(end) - minutes(start)) * PX)
 }
 
+function wobble(id: string) {
+  let n = 0
+  for (const ch of id) n += ch.charCodeAt(0)
+  return (n % 7) - 3
+}
+
+function slotKindWord(kind: WeeklySlot['kind']) {
+  return kind === 'L' ? 'lab' : kind === 'T' ? 'théorie' : 'activité'
+}
+
+function inkOn(hex: string) {
+  const n = hex.replace('#', '')
+  if (n.length < 6) return '#fffaf9'
+  const r = parseInt(n.slice(0, 2), 16)
+  const g = parseInt(n.slice(2, 4), 16)
+  const b = parseInt(n.slice(4, 6), 16)
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? '#3a2430' : '#fffaf9'
+}
+
 export function PlannerPage() {
   const {
     store,
@@ -199,7 +218,10 @@ export function PlannerPage() {
   }
 
   function onClassClick(slotId: string) {
-    if (!editing) return
+    if (!editing) {
+      setMode('courses')
+      return
+    }
     const slot = college.slots.find((s) => s.id === slotId)
     if (slot) setSheet({ type: 'slot', slot: { ...slot } })
   }
@@ -225,8 +247,9 @@ export function PlannerPage() {
       <span className="kicker">{college.session.college} · {college.session.name}</span>
       <h1>Planner</h1>
       <p className="lede">
-        Tes cours, tes travaux, et les petits trous roses où coller du Dar al-Ilm. Tout se
-        modifie — un intra déplacé, un lab trop long, une erreur : tu corriges, l’agenda suit.
+        L’horaire, c’est tes cours. Change un jour ou une heure dans Mes cours — la semaine et le
+        mois se recollent. Les travaux, les évals et le curriculum se collent par-dessus, comme des
+        post-it.
       </p>
 
       <div className="row planner-toolbar" style={{ marginTop: 18, justifyContent: 'space-between' }}>
@@ -438,37 +461,28 @@ export function PlannerPage() {
               const evs = eventsOn(day, college.events)
               const dayTasks = tasks.filter((t) => t.date === key)
               const pockets = pocketsOn(day, college.slots, college.events, college.session)
-              const timed = [
-                ...slots.map((s) => ({
-                  key: s.id,
-                  start: s.start,
-                  end: s.end,
-                  title: s.title,
-                  meta: [s.room, s.teacher].filter(Boolean).join(' · '),
-                  cls: s.kind === 'activity' ? 'blk-activity' : 'blk-class',
-                  course: s.course,
-                })),
+              const stickies = [
                 ...evs
                   .filter((e) => e.start)
                   .map((e) => ({
-                    key: e.id,
+                    id: e.id,
                     start: e.start!,
                     end: e.end ?? e.start!,
                     title: e.title,
-                    meta: [e.percent, kindLabel(e.kind)].filter(Boolean).join(' · '),
-                    cls: `blk-${e.kind}`,
-                    course: e.course,
+                    meta: e.percent || kindLabel(e.kind),
+                    kind: e.kind,
+                    onClick: () => onEventClick(e),
                   })),
                 ...dayTasks
                   .filter((t) => t.start)
                   .map((t) => ({
-                    key: t.id,
+                    id: t.id,
                     start: t.start!,
                     end: t.end ?? t.start!,
                     title: t.title,
                     meta: kindLabel(t.kind),
-                    cls: t.kind === 'curriculum' ? 'blk-curriculum' : 'blk-life',
-                    course: '',
+                    kind: t.kind,
+                    onClick: () => (editing ? openTask(t) : flipTask(t)),
                   })),
               ]
               return (
@@ -483,8 +497,9 @@ export function PlannerPage() {
                       .map((e) => (
                         <button
                           key={e.id}
-                          className={`chip-ev ${e.kind} ${doneMap[e.id] ? 'done' : ''}`}
+                          className={`sticky-note st-${e.kind} ${doneMap[e.id] ? 'done' : ''}`}
                           type="button"
+                          style={{ transform: `rotate(${wobble(e.id)}deg)` }}
                           onClick={() => onEventClick(e)}
                         >
                           {e.title}
@@ -495,8 +510,9 @@ export function PlannerPage() {
                       .map((t) => (
                         <button
                           key={t.id}
-                          className={`chip-ev ${t.kind} ${t.done ? 'done' : ''}`}
+                          className={`sticky-note st-${t.kind} ${t.done ? 'done' : ''}`}
                           type="button"
+                          style={{ transform: `rotate(${wobble(t.id)}deg)` }}
                           onClick={() => (editing ? openTask(t) : flipTask(t))}
                         >
                           {t.title}
@@ -529,34 +545,45 @@ export function PlannerPage() {
                         {p.label}
                       </button>
                     ))}
-                    {timed.map((b) => (
+                    {slots.map((s) => {
+                      const course = college.courses.find((c) => c.code === s.course)
+                      const isAct = s.kind === 'activity'
+                      return (
+                        <button
+                          key={s.id}
+                          className={isAct ? 'blk blk-activity' : 'blk blk-class'}
+                          type="button"
+                          style={{
+                            top: top(s.start),
+                            height: height(s.start, s.end),
+                            background: isAct ? undefined : course?.color,
+                            color: isAct ? undefined : inkOn(course?.color ?? '#a84562'),
+                          }}
+                          onClick={() => onClassClick(s.id)}
+                        >
+                          <b>{course?.short ?? s.title}</b>
+                          <span>
+                            {s.start}–{s.end}
+                            {s.room ? ` · ${s.room}` : ''}
+                          </span>
+                        </button>
+                      )
+                    })}
+                    {stickies.map((st) => (
                       <button
-                        key={b.key}
-                        className={`blk ${b.cls}`}
+                        key={st.id}
+                        className={`sticky-note st-${st.kind} timed`}
                         type="button"
-                        style={{ top: top(b.start), height: height(b.start, b.end) }}
-                        onClick={() => {
-                          const slot = college.slots.find((s) => s.id === b.key)
-                          if (slot) {
-                            onClassClick(slot.id)
-                            return
-                          }
-                          const ev = college.events.find((e) => e.id === b.key)
-                          if (ev) {
-                            onEventClick(ev)
-                            return
-                          }
-                          const task = dayTasks.find((t) => t.id === b.key)
-                          if (task) {
-                            if (editing) openTask(task)
-                            else flipTask(task)
-                          }
+                        style={{
+                          top: top(st.start) + 6,
+                          height: Math.max(46, height(st.start, st.end) - 8),
+                          transform: `rotate(${wobble(st.id)}deg)`,
                         }}
+                        onClick={st.onClick}
                       >
-                        <b>{b.title}</b>
+                        <b>{st.title}</b>
                         <span>
-                          {b.start}–{b.end}
-                          {b.meta ? ` · ${b.meta}` : ''}
+                          {st.start} · {st.meta}
                         </span>
                       </button>
                     ))}
@@ -581,8 +608,10 @@ export function PlannerPage() {
               {monthGrid.map((day) => {
                 const key = iso(day)
                 const outside = day.getMonth() !== cursor.getMonth()
+                const daySlots = slotsOn(day, college.slots, college.events, college.session)
                 const evs = eventsOn(day, college.events)
                 const dayTasks = tasks.filter((t) => t.date === key)
+                const dots = daySlots.filter((s) => s.kind !== 'activity')
                 const chips = [
                   ...evs.map((e) => ({ id: e.id, title: e.title, kind: e.kind })),
                   ...dayTasks.map((t) => ({ id: t.id, title: t.title, kind: t.kind })),
@@ -596,8 +625,24 @@ export function PlannerPage() {
                     onDoubleClick={() => openDraft(key)}
                   >
                     <span className="num">{day.getDate()}</span>
+                    {dots.length ? (
+                      <span className="course-dots">
+                        {dots.map((s) => (
+                          <i
+                            className="course-dot"
+                            key={s.id}
+                            style={{ background: college.courses.find((c) => c.code === s.course)?.color ?? '#f4c4cc' }}
+                            title={s.title}
+                          />
+                        ))}
+                      </span>
+                    ) : null}
                     {chips.slice(0, 3).map((c) => (
-                      <span className={`chip-ev ${c.kind}`} key={c.id}>
+                      <span
+                        className={`sticky-mini st-${c.kind}`}
+                        key={c.id}
+                        style={{ transform: `rotate(${wobble(c.id)}deg)` }}
+                      >
                         {c.title}
                       </span>
                     ))}
@@ -721,8 +766,16 @@ export function PlannerPage() {
       {mode === 'courses' ? (
         <>
           <Rule>Tes cours</Rule>
+          <p className="muted small">
+            Ici tu changes l’horaire. Semaine et mois suivent tout de suite — les post-it (travaux,
+            curriculum) restent collés sur les jours.
+          </p>
           <div className="grid-2">
             {college.courses.map((c) => {
+              const hours = college.slots
+                .filter((s) => s.course === c.code)
+                .slice()
+                .sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start))
               const next = coming.filter((e) => e.course === c.code).slice(0, 4)
               return (
                 <article className="panel" key={c.code}>
@@ -730,11 +783,20 @@ export function PlannerPage() {
                     <span className="kicker" style={{ color: c.color }}>
                       <Editable value={c.code} onChange={(code) => updateCollegeCourse(c.code, { code })} />
                     </span>
-                    {editing ? <IconX onClick={() => removeCollegeCourse(c.code)} /> : null}
+                    <span className="row">
+                      <input
+                        type="color"
+                        className="color-dot"
+                        value={c.color}
+                        aria-label="Couleur du cours"
+                        onChange={(e) => updateCollegeCourse(c.code, { color: e.target.value })}
+                      />
+                      <IconX onClick={() => removeCollegeCourse(c.code)} />
+                    </span>
                   </div>
-                  <h3>
+                  <h3 className="course-title">
                     <Editable value={c.short} onChange={(short) => updateCollegeCourse(c.code, { short })} />
-                    {' · '}
+                    <span className="muted">·</span>
                     <Editable value={c.title} onChange={(title) => updateCollegeCourse(c.code, { title })} />
                   </h3>
                   <p className="muted small">
@@ -748,6 +810,73 @@ export function PlannerPage() {
                     onChange={(note) => updateCollegeCourse(c.code, { note })}
                     placeholder="Notes du plan de cours"
                   />
+                  <div className="course-hours">
+                    <span className="kicker">Horaire de la semaine</span>
+                    {hours.map((slot) => (
+                      <div className="hour-row" key={slot.id}>
+                        <select
+                          value={slot.weekday}
+                          aria-label="Jour"
+                          onChange={(e) => updateCollegeSlot(slot.id, { weekday: Number(e.target.value) })}
+                        >
+                          {WEEKDAYS.map((d) => (
+                            <option key={d.n} value={d.n}>
+                              {d.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="time"
+                          value={slot.start}
+                          aria-label="Début"
+                          onChange={(e) => updateCollegeSlot(slot.id, { start: e.target.value.slice(0, 5) })}
+                        />
+                        <input
+                          type="time"
+                          value={slot.end}
+                          aria-label="Fin"
+                          onChange={(e) => updateCollegeSlot(slot.id, { end: e.target.value.slice(0, 5) })}
+                        />
+                        <select
+                          value={slot.kind}
+                          aria-label="Type"
+                          onChange={(e) => {
+                            const kind = e.target.value as WeeklySlot['kind']
+                            updateCollegeSlot(slot.id, {
+                              kind,
+                              title: `${c.short} · ${slotKindWord(kind)}`,
+                            })
+                          }}
+                        >
+                          <option value="T">Théorie</option>
+                          <option value="L">Lab</option>
+                          <option value="activity">Activité</option>
+                        </select>
+                        <input
+                          value={slot.room}
+                          placeholder="Local"
+                          aria-label="Local"
+                          onChange={(e) => updateCollegeSlot(slot.id, { room: e.target.value })}
+                        />
+                        <IconX onClick={() => removeCollegeSlot(slot.id)} />
+                      </div>
+                    ))}
+                    <AddLine
+                      label="Ajouter un horaire"
+                      onClick={() =>
+                        addCollegeSlot({
+                          course: c.code,
+                          weekday: 1,
+                          start: '09:10',
+                          end: '12:10',
+                          title: `${c.short} · théorie`,
+                          room: c.room.split(' / ')[0] ?? c.room,
+                          teacher: c.teacher,
+                          kind: 'T',
+                        })
+                      }
+                    />
+                  </div>
                   <ul className="list">
                     {next.length ? (
                       next.map((e) => (
@@ -757,24 +886,43 @@ export function PlannerPage() {
                           </span>
                           <span className="row">
                             <span className="small">{e.percent || kindLabel(e.kind)}</span>
-                            {editing ? (
-                              <button
-                                className="ghost"
-                                type="button"
-                                onClick={() => setSheet({ type: 'event', event: { ...e } })}
-                              >
-                                Modifier
-                              </button>
-                            ) : null}
+                            <button
+                              className="ghost"
+                              type="button"
+                              onClick={() => setSheet({ type: 'event', event: { ...e } })}
+                            >
+                              Modifier
+                            </button>
                           </span>
                         </li>
                       ))
                     ) : (
                       <li>
-                        <span className="muted">Rien dans les 21 prochains jours.</span>
+                        <span className="muted">Pas de remise à venir — tu peux en coller une.</span>
                       </li>
                     )}
                   </ul>
+                  <AddLine
+                    label="Coller une remise / un exam"
+                    onClick={() => {
+                      const id = addCollegeEvent({
+                        date: selected,
+                        kind: 'due',
+                        title: `Remise · ${c.short}`,
+                        course: c.code,
+                      })
+                      setSheet({
+                        type: 'event',
+                        event: {
+                          id,
+                          date: selected,
+                          kind: 'due',
+                          title: `Remise · ${c.short}`,
+                          course: c.code,
+                        },
+                      })
+                    }}
+                  />
                   <a className="gold" href={href(`school/${c.schoolHint}`)}>
                     Relier à{' '}
                     {c.schoolHint === 'career'
@@ -789,11 +937,47 @@ export function PlannerPage() {
               )
             })}
           </div>
+          {college.slots.some((s) => !college.courses.some((course) => course.code === s.course)) ? (
+            <article className="panel" style={{ marginTop: 16 }}>
+              <span className="kicker">Hors cours</span>
+              <h3>Activités collège</h3>
+              {college.slots
+                .filter((s) => !college.courses.some((course) => course.code === s.course))
+                .map((slot) => (
+                  <div className="hour-row" key={slot.id}>
+                    <select
+                      value={slot.weekday}
+                      onChange={(e) => updateCollegeSlot(slot.id, { weekday: Number(e.target.value) })}
+                    >
+                      {WEEKDAYS.map((d) => (
+                        <option key={d.n} value={d.n}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="time"
+                      value={slot.start}
+                      onChange={(e) => updateCollegeSlot(slot.id, { start: e.target.value.slice(0, 5) })}
+                    />
+                    <input
+                      type="time"
+                      value={slot.end}
+                      onChange={(e) => updateCollegeSlot(slot.id, { end: e.target.value.slice(0, 5) })}
+                    />
+                    <input
+                      value={slot.title}
+                      onChange={(e) => updateCollegeSlot(slot.id, { title: e.target.value })}
+                    />
+                    <IconX onClick={() => removeCollegeSlot(slot.id)} />
+                  </div>
+                ))}
+            </article>
+          ) : null}
           <AddLine
             label="Ajouter un cours"
             onClick={() => {
               addCollegeCourse()
-              setEditing(true)
             }}
           />
         </>

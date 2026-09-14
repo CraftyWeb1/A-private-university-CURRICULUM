@@ -527,10 +527,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setStore((s) => {
           const nextCode = patch.code ?? code
           const courses = s.college.courses.map((c) => (c.code === code ? { ...c, ...patch } : c))
-          const slots =
-            nextCode === code
-              ? s.college.slots
-              : s.college.slots.map((slot) => (slot.course === code ? { ...slot, course: nextCode } : slot))
+          const slots = s.college.slots.map((slot) => {
+            if (slot.course !== code) return slot
+            const kindWord = slot.kind === 'L' ? 'lab' : slot.kind === 'T' ? 'théorie' : 'activité'
+            return {
+              ...slot,
+              course: nextCode,
+              teacher: patch.teacher !== undefined ? patch.teacher : slot.teacher,
+              room: patch.room !== undefined ? patch.room : slot.room,
+              title: patch.short !== undefined ? `${patch.short} · ${kindWord}` : slot.title,
+            }
+          })
           const events =
             nextCode === code
               ? s.college.events
