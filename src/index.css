@@ -989,6 +989,9 @@ h3 { font-size: 22px; }
   border: 0;
   box-shadow: 2px 3px 0 rgba(92, 42, 58, 0.12);
   line-height: 1.15;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .sticky-note {
@@ -1058,6 +1061,41 @@ h3 { font-size: 22px; }
 .sticky-curriculum, .st-curriculum { background: #f3d4e8; color: var(--ink); }
 .sticky-life, .st-life { background: #fff6d8; color: var(--ink); }
 .sticky-note.done { opacity: 0.45; text-decoration: line-through; }
+
+.sticky-note.is-dragging,
+.sticky-mini.is-dragging {
+  opacity: 0.22;
+}
+
+.sticky-ghost {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+  margin: 0;
+  cursor: grabbing;
+  box-shadow: 4px 8px 0 rgba(92, 42, 58, 0.16);
+}
+
+.is-sticky-drag,
+.is-sticky-drag * {
+  cursor: grabbing !important;
+}
+
+.planner-col.drop-on,
+.month-cell.drop-on {
+  background: #fff0f4;
+  box-shadow: 0 0 0 2px var(--moss);
+}
+
+.drop-line {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 0;
+  border-top: 2px dashed var(--moss);
+  z-index: 6;
+  pointer-events: none;
+}
 
 .course-hours {
   margin-top: 12px;
@@ -1186,6 +1224,9 @@ h3 { font-size: 22px; }
   flex-direction: column;
   gap: 3px;
   align-items: stretch;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
 }
 
 .month-cell .num {

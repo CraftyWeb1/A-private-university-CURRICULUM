@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react'
 import { AddLine, Editable, IconX } from '../components/Editable'
 import { topicKey } from '../data/curriculum'
 import {
@@ -12,6 +12,7 @@ import {
   kindLabel,
   minutes,
   parseIso,
+  hhmm,
   pocketsOn,
   seedCollege,
   slotsOn,
@@ -106,6 +107,66 @@ function inkOn(hex: string) {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62 ? '#3a2430' : '#fffaf9'
 }
 
+const DRAG_PX = 6
+
+type StickySource = 'task' | 'event'
+type StickyDrop = {
+  date: string
+  start?: string
+  end?: string
+  allDay?: boolean
+  keepTime?: boolean
+}
+type DragSticky = {
+  source: StickySource
+  id: string
+  title: string
+  kind: string
+  date: string
+  start?: string
+  end?: string
+  grabX: number
+  grabY: number
+  w: number
+  h: number
+  x: number
+  y: number
+  drop: StickyDrop | null
+}
+
+function stickyDuration(start?: string, end?: string) {
+  if (start && end && minutes(end) > minutes(start)) return minutes(end) - minutes(start)
+  return 50
+}
+
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n))
+}
+
+function dropFromPoint(x: number, y: number, duration: number): StickyDrop | null {
+  for (const node of document.elementsFromPoint(x, y)) {
+    if (!(node instanceof Element)) continue
+    const lane = node.closest('[data-drop-lane]')
+    if (lane instanceof HTMLElement && lane.dataset.dropLane) {
+      const rect = lane.getBoundingClientRect()
+      const dur = Math.max(20, duration)
+      let startMins = DAY_START + (y - rect.top) / PX
+      startMins = Math.round(startMins / 10) * 10
+      startMins = clamp(startMins, DAY_START, Math.max(DAY_START, DAY_END - dur))
+      return { date: lane.dataset.dropLane, start: hhmm(startMins), end: hhmm(startMins + dur) }
+    }
+    const all = node.closest('[data-drop-allday]')
+    if (all instanceof HTMLElement && all.dataset.dropAllday) {
+      return { date: all.dataset.dropAllday, allDay: true }
+    }
+    const day = node.closest('[data-drop-day]')
+    if (day instanceof HTMLElement && day.dataset.dropDay) {
+      return { date: day.dataset.dropDay, keepTime: true }
+    }
+  }
+  return null
+}
+
 export function PlannerPage() {
   const {
     store,
@@ -135,6 +196,27 @@ export function PlannerPage() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [sheet, setSheet] = useState<Sheet | null>(null)
   const [query, setQuery] = useState('')
+  const [drag, setDrag] = useState<DragSticky | null>(null)
+  const dragRef = useRef<DragSticky | null>(null)
+  const skipClick = useRef(false)
+  const originRef = useRef<{
+    pointerId: number
+    item: {
+      source: StickySource
+      id: string
+      title: string
+      kind: string
+      date: string
+      start?: string
+      end?: string
+    }
+    originX: number
+    originY: number
+    grabX: number
+    grabY: number
+    w: number
+    h: number
+  } | null>(null)
 
   const today = iso(new Date())
   const weekStart = startOfWeek(cursor)
@@ -240,16 +322,150 @@ export function PlannerPage() {
     }
   }
 
+  function setDragBoth(next: DragSticky | null) {
+    dragRef.current = next
+    setDrag(next)
+  }
+
+  function applyStickyDrop(item: DragSticky, drop: StickyDrop) {
+    const duration = stickyDuration(item.start, item.end)
+    let start = item.start
+    let end = item.end
+    if (drop.allDay) {
+      start = undefined
+      end = undefined
+    } else if (!drop.keepTime && drop.start) {
+      start = drop.start
+      end = drop.end ?? hhmm(minutes(drop.start) + duration)
+    }
+    if (item.source === 'task') {
+      updatePlannerTask(item.id, { date: drop.date, start, end })
+    } else {
+      const ev = college.events.find((e) => e.id === item.id)
+      let endDate = ev?.endDate
+      if (ev?.endDate) {
+        const span = Math.round(
+          (parseIso(ev.endDate).getTime() - parseIso(ev.date).getTime()) / 86400000,
+        )
+        endDate = iso(addDays(parseIso(drop.date), span))
+      }
+      updateCollegeEvent(item.id, { date: drop.date, endDate, start, end })
+    }
+    setSelected(drop.date)
+  }
+
+  function stickyPointer(
+    item: {
+      source: StickySource
+      id: string
+      title: string
+      kind: string
+      date: string
+      start?: string
+      end?: string
+    },
+    onActivate: () => void,
+  ) {
+    function beginDrag(clientX: number, clientY: number, rect: DOMRect) {
+      skipClick.current = false
+      originRef.current = {
+        pointerId: 1,
+        item,
+        originX: clientX,
+        originY: clientY,
+        grabX: clientX - rect.left,
+        grabY: clientY - rect.top,
+        w: Math.max(rect.width, 88),
+        h: Math.max(rect.height, 36),
+      }
+      const onMove = (ev: { clientX: number; clientY: number; preventDefault?: () => void }) => {
+        const origin = originRef.current
+        if (!origin || origin.item.id !== item.id) return
+        const live =
+          skipClick.current ||
+          Math.hypot(ev.clientX - origin.originX, ev.clientY - origin.originY) >= DRAG_PX
+        if (!live) return
+        skipClick.current = true
+        ev.preventDefault?.()
+        setDragBoth({
+          ...origin.item,
+          grabX: origin.grabX,
+          grabY: origin.grabY,
+          w: origin.w,
+          h: origin.h,
+          x: ev.clientX,
+          y: ev.clientY,
+          drop: dropFromPoint(ev.clientX, ev.clientY, stickyDuration(item.start, item.end)),
+        })
+      }
+      const onUp = (ev: { clientX: number; clientY: number }) => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+        const origin = originRef.current
+        const current = dragRef.current
+        const drop =
+          current?.drop ??
+          (origin && skipClick.current
+            ? dropFromPoint(ev.clientX, ev.clientY, stickyDuration(origin.item.start, origin.item.end))
+            : null)
+        if (origin && skipClick.current && drop) {
+          applyStickyDrop(
+            current ?? {
+              ...origin.item,
+              grabX: origin.grabX,
+              grabY: origin.grabY,
+              w: origin.w,
+              h: origin.h,
+              x: ev.clientX,
+              y: ev.clientY,
+              drop,
+            },
+            drop,
+          )
+        }
+        originRef.current = null
+        setDragBoth(null)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    }
+    return {
+      onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
+        if (e.button !== 0) return
+        e.stopPropagation()
+        beginDrag(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect())
+      },
+      onMouseDown: (e: MouseEvent<HTMLButtonElement>) => {
+        if (e.button !== 0 || originRef.current) return
+        e.stopPropagation()
+        beginDrag(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect())
+      },
+      onClick: (e: MouseEvent<HTMLButtonElement>) => {
+        e.stopPropagation()
+        if (skipClick.current) {
+          e.preventDefault()
+          skipClick.current = false
+          return
+        }
+        onActivate()
+      },
+    }
+  }
+
   const heavyWeek = doubleDays.length > 0
 
   return (
-    <div>
+    <div className={drag ? 'is-sticky-drag' : undefined}>
       <span className="kicker">{college.session.college} · {college.session.name}</span>
       <h1>Planner</h1>
       <p className="lede">
         L’horaire, c’est tes cours. Change un jour ou une heure dans Mes cours — la semaine et le
-        mois se recollent. Les travaux, les évals et le curriculum se collent par-dessus, comme des
-        post-it.
+        mois se recollent. Les travaux, les évals et le curriculum se collent par-dessus : glisse un
+        post-it pour le recoller.
       </p>
 
       <div className="row planner-toolbar" style={{ marginTop: 18, justifyContent: 'space-between' }}>
@@ -465,42 +681,53 @@ export function PlannerPage() {
                 ...evs
                   .filter((e) => e.start)
                   .map((e) => ({
+                    source: 'event' as const,
                     id: e.id,
+                    date: key,
                     start: e.start!,
                     end: e.end ?? e.start!,
                     title: e.title,
-                    meta: e.percent || kindLabel(e.kind),
+                    meta: `${e.start} · ${e.percent || kindLabel(e.kind)}`,
                     kind: e.kind,
-                    onClick: () => onEventClick(e),
+                    onActivate: () => onEventClick(e),
                   })),
                 ...dayTasks
                   .filter((t) => t.start)
                   .map((t) => ({
+                    source: 'task' as const,
                     id: t.id,
+                    date: key,
                     start: t.start!,
                     end: t.end ?? t.start!,
                     title: t.title,
-                    meta: kindLabel(t.kind),
+                    meta: `${t.start} · ${kindLabel(t.kind)}`,
                     kind: t.kind,
-                    onClick: () => (editing ? openTask(t) : flipTask(t)),
+                    onActivate: () => (editing ? openTask(t) : flipTask(t)),
                   })),
               ]
               return (
-                <div className={isToday ? 'planner-col today' : 'planner-col'} key={key}>
+                <div
+                  className={`planner-col${isToday ? ' today' : ''}${drag?.drop?.date === key ? ' drop-on' : ''}`}
+                  data-drop-day={key}
+                  key={key}
+                >
                   <button className="planner-head" type="button" onClick={() => openDraft(key)}>
                     <b>{DAYS[(day.getDay() + 6) % 7]}</b>
                     <span>{day.getDate()}</span>
                   </button>
-                  <div className="all-day">
+                  <div className="all-day" data-drop-allday={key}>
                     {evs
                       .filter((e) => !e.start)
                       .map((e) => (
                         <button
                           key={e.id}
-                          className={`sticky-note st-${e.kind} ${doneMap[e.id] ? 'done' : ''}`}
+                          className={`sticky-note st-${e.kind} ${doneMap[e.id] ? 'done' : ''} ${drag?.id === e.id ? 'is-dragging' : ''}`}
                           type="button"
                           style={{ transform: `rotate(${wobble(e.id)}deg)` }}
-                          onClick={() => onEventClick(e)}
+                          {...stickyPointer(
+                            { source: 'event', id: e.id, title: e.title, kind: e.kind, date: key },
+                            () => onEventClick(e),
+                          )}
                         >
                           {e.title}
                         </button>
@@ -510,10 +737,13 @@ export function PlannerPage() {
                       .map((t) => (
                         <button
                           key={t.id}
-                          className={`sticky-note st-${t.kind} ${t.done ? 'done' : ''}`}
+                          className={`sticky-note st-${t.kind} ${t.done ? 'done' : ''} ${drag?.id === t.id ? 'is-dragging' : ''}`}
                           type="button"
                           style={{ transform: `rotate(${wobble(t.id)}deg)` }}
-                          onClick={() => (editing ? openTask(t) : flipTask(t))}
+                          {...stickyPointer(
+                            { source: 'task', id: t.id, title: t.title, kind: t.kind, date: key },
+                            () => (editing ? openTask(t) : flipTask(t)),
+                          )}
                         >
                           {t.title}
                         </button>
@@ -521,12 +751,16 @@ export function PlannerPage() {
                   </div>
                   <div
                     className="planner-lane"
+                    data-drop-lane={key}
                     style={{ height: (DAY_END - DAY_START) * PX }}
                     onClick={(e) => {
                       if (e.target !== e.currentTarget) return
                       openDraft(key, { kind: 'curriculum' })
                     }}
                   >
+                    {drag?.drop?.date === key && drag.drop.start ? (
+                      <div className="drop-line" style={{ top: top(drag.drop.start) }} />
+                    ) : null}
                     {pockets.map((p) => (
                       <button
                         key={`${key}-${p.start}`}
@@ -572,19 +806,28 @@ export function PlannerPage() {
                     {stickies.map((st) => (
                       <button
                         key={st.id}
-                        className={`sticky-note st-${st.kind} timed`}
+                        className={`sticky-note st-${st.kind} timed ${drag?.id === st.id ? 'is-dragging' : ''}`}
                         type="button"
                         style={{
                           top: top(st.start) + 6,
                           height: Math.max(46, height(st.start, st.end) - 8),
                           transform: `rotate(${wobble(st.id)}deg)`,
                         }}
-                        onClick={st.onClick}
+                        {...stickyPointer(
+                          {
+                            source: st.source,
+                            id: st.id,
+                            title: st.title,
+                            kind: st.kind,
+                            date: st.date,
+                            start: st.start,
+                            end: st.end,
+                          },
+                          st.onActivate,
+                        )}
                       >
                         <b>{st.title}</b>
-                        <span>
-                          {st.start} · {st.meta}
-                        </span>
+                        <span>{st.meta}</span>
                       </button>
                     ))}
                   </div>
@@ -613,16 +856,46 @@ export function PlannerPage() {
                 const dayTasks = tasks.filter((t) => t.date === key)
                 const dots = daySlots.filter((s) => s.kind !== 'activity')
                 const chips = [
-                  ...evs.map((e) => ({ id: e.id, title: e.title, kind: e.kind })),
-                  ...dayTasks.map((t) => ({ id: t.id, title: t.title, kind: t.kind })),
+                  ...evs.map((e) => ({
+                    source: 'event' as const,
+                    id: e.id,
+                    title: e.title,
+                    kind: e.kind,
+                    date: key,
+                    start: e.start,
+                    end: e.end,
+                    onActivate: () => {
+                      setSelected(key)
+                      onEventClick(e)
+                    },
+                  })),
+                  ...dayTasks.map((t) => ({
+                    source: 'task' as const,
+                    id: t.id,
+                    title: t.title,
+                    kind: t.kind,
+                    date: key,
+                    start: t.start,
+                    end: t.end,
+                    onActivate: () => {
+                      setSelected(key)
+                      if (editing) openTask(t)
+                      else flipTask(t)
+                    },
+                  })),
                 ]
                 return (
-                  <button
+                  <div
                     key={key}
-                    type="button"
-                    className={`month-cell ${outside ? 'out' : ''} ${key === today ? 'today' : ''} ${key === selected ? 'pick' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    data-drop-day={key}
+                    className={`month-cell ${outside ? 'out' : ''} ${key === today ? 'today' : ''} ${key === selected ? 'pick' : ''} ${drag?.drop?.date === key ? 'drop-on' : ''}`}
                     onClick={() => setSelected(key)}
                     onDoubleClick={() => openDraft(key)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') setSelected(key)
+                    }}
                   >
                     <span className="num">{day.getDate()}</span>
                     {dots.length ? (
@@ -638,16 +911,29 @@ export function PlannerPage() {
                       </span>
                     ) : null}
                     {chips.slice(0, 3).map((c) => (
-                      <span
-                        className={`sticky-mini st-${c.kind}`}
+                      <button
+                        className={`sticky-mini st-${c.kind} ${drag?.id === c.id ? 'is-dragging' : ''}`}
                         key={c.id}
+                        type="button"
                         style={{ transform: `rotate(${wobble(c.id)}deg)` }}
+                        {...stickyPointer(
+                          {
+                            source: c.source,
+                            id: c.id,
+                            title: c.title,
+                            kind: c.kind,
+                            date: c.date,
+                            start: c.start,
+                            end: c.end,
+                          },
+                          c.onActivate,
+                        )}
                       >
                         {c.title}
-                      </span>
+                      </button>
                     ))}
                     {chips.length > 3 ? <span className="more">+{chips.length - 3}</span> : null}
-                  </button>
+                  </div>
                 )
               })}
             </div>
@@ -1538,6 +1824,20 @@ export function PlannerPage() {
               ) : null}
             </div>
           </form>
+        </div>
+      ) : null}
+      {drag ? (
+        <div
+          className={`sticky-note sticky-ghost st-${drag.kind}`}
+          style={{
+            left: drag.x - drag.grabX,
+            top: drag.y - drag.grabY,
+            width: drag.w,
+            minHeight: drag.h,
+            transform: `rotate(${wobble(drag.id)}deg)`,
+          }}
+        >
+          <b>{drag.title}</b>
         </div>
       ) : null}
     </div>
