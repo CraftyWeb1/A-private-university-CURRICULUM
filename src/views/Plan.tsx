@@ -87,6 +87,11 @@ export function WeekPage() {
       <h1>The hours are small on purpose.</h1>
       <p className="lede">
         School and work take priority when they must. This timetable is a trellis, not a prison.
+        The college grid — exams, labs, remises — lives in the{' '}
+        <a className="gold" href={href('planner')}>
+          planner
+        </a>
+        .
       </p>
       <div className="week" style={{ marginTop: 24 }}>
         {WEEK.map((d, i) => (

@@ -3,6 +3,7 @@ export type Path =
   | { view: 'school'; id: string }
   | { view: 'course'; id: string }
   | { view: 'page'; id: string }
+  | { view: 'planner' }
   | { view: 'semester' }
   | { view: 'week' }
   | { view: 'year' }
@@ -24,6 +25,7 @@ export function parseHash(hash = window.location.hash): Path {
   if (head === 'school' && parts[1]) return { view: 'school', id: parts[1] }
   if (head === 'course' && parts[1]) return { view: 'course', id: parts[1] }
   if (head === 'page' && parts[1]) return { view: 'page', id: parts[1] }
+  if (head === 'planner') return { view: 'planner' }
   if (head === 'semester') return { view: 'semester' }
   if (head === 'week') return { view: 'week' }
   if (head === 'year') return { view: 'year' }

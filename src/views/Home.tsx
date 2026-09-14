@@ -68,9 +68,14 @@ export function Home() {
           <p>
             Minors: {term.minors.map((m) => m.name).join(' · ')}
           </p>
-          <a className="gold" href={href('semester')} style={{ marginTop: 12 }}>
-            Open the term
-          </a>
+          <div className="row" style={{ marginTop: 12 }}>
+            <a className="gold" href={href('planner')}>
+              Planner
+            </a>
+            <a className="ghost" href={href('semester')}>
+              Open the term
+            </a>
+          </div>
         </article>
         <article className="panel dark">
           <span className="kicker" style={{ color: 'var(--gold-2)' }}>

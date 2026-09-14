@@ -35,6 +35,8 @@ export const emptyStore = (): Store => ({
   manuscripts: [],
   projects: STARTER_PROJECTS,
   quran: [],
+  plannerTasks: [],
+  plannerDone: {},
 })
 
 export function loadStore(): Store {
@@ -60,6 +62,8 @@ export function loadStore(): Store {
       manuscripts: parsed.manuscripts ?? [],
       projects: parsed.projects ?? base.projects,
       quran: parsed.quran ?? [],
+      plannerTasks: parsed.plannerTasks ?? [],
+      plannerDone: parsed.plannerDone ?? {},
     }
   } catch {
     return base
@@ -100,5 +104,7 @@ export function parseImportedStore(text: string): Store {
     manuscripts: parsed.manuscripts ?? [],
     projects: parsed.projects ?? [],
     quran: parsed.quran ?? [],
+    plannerTasks: parsed.plannerTasks ?? [],
+    plannerDone: parsed.plannerDone ?? {},
   }
 }

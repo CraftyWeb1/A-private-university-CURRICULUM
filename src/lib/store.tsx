@@ -10,6 +10,7 @@ import type {
   LearningKind,
   Manuscript,
   Page,
+  PlannerTask,
   Project,
   QuranNote,
   Resource,
@@ -73,6 +74,11 @@ type StoreApi = {
   removeProject: (id: string) => void
   addQuran: (note: Omit<QuranNote, 'id'>) => void
   removeQuran: (id: string) => void
+  addPlannerTask: (task: Omit<PlannerTask, 'id' | 'done'> & { done?: boolean }) => string
+  updatePlannerTask: (id: string, patch: Patch<PlannerTask>) => void
+  removePlannerTask: (id: string) => void
+  togglePlannerTask: (id: string) => void
+  togglePlannerEvent: (id: string) => void
   download: () => void
   upload: (text: string) => void
   schoolById: (id: string) => School | undefined
@@ -441,6 +447,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addQuran: (note) =>
         setStore((s) => ({ ...s, quran: [{ ...note, id: uid() }, ...s.quran] })),
       removeQuran: (id) => setStore((s) => ({ ...s, quran: s.quran.filter((q) => q.id !== id) })),
+      addPlannerTask: (task) => {
+        const id = uid()
+        const next: PlannerTask = {
+          id,
+          date: task.date,
+          start: task.start,
+          end: task.end,
+          title: task.title,
+          note: task.note ?? '',
+          kind: task.kind,
+          courseId: task.courseId,
+          topic: task.topic,
+          schoolId: task.schoolId,
+          done: task.done ?? false,
+        }
+        setStore((s) => ({ ...s, plannerTasks: [...s.plannerTasks, next] }))
+        return id
+      },
+      updatePlannerTask: (id, patch) =>
+        setStore((s) => ({
+          ...s,
+          plannerTasks: s.plannerTasks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        })),
+      removePlannerTask: (id) =>
+        setStore((s) => ({ ...s, plannerTasks: s.plannerTasks.filter((t) => t.id !== id) })),
+      togglePlannerTask: (id) =>
+        setStore((s) => ({
+          ...s,
+          plannerTasks: s.plannerTasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
+        })),
+      togglePlannerEvent: (id) =>
+        setStore((s) => ({
+          ...s,
+          plannerDone: { ...s.plannerDone, [id]: !s.plannerDone[id] },
+        })),
       download: () => exportStore(store),
       upload: (text) => setStore(parseImportedStore(text)),
       schoolById,

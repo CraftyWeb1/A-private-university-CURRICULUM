@@ -4,6 +4,7 @@ import { usePath } from './lib/usePath'
 import { Home } from './views/Home'
 import { CoursePage, SchoolPage } from './views/School'
 import { SemesterPage, TranscriptPage, WeekPage, YearPage } from './views/Plan'
+import { PlannerPage } from './views/Planner'
 import { PagePage } from './views/Page'
 import {
   AuthorPage,
@@ -21,6 +22,7 @@ function Screen() {
   if (path.view === 'school') body = <SchoolPage id={path.id} />
   if (path.view === 'course') body = <CoursePage id={path.id} />
   if (path.view === 'page') body = <PagePage id={path.id} />
+  if (path.view === 'planner') body = <PlannerPage />
   if (path.view === 'semester') body = <SemesterPage />
   if (path.view === 'week') body = <WeekPage />
   if (path.view === 'year') body = <YearPage />

@@ -137,6 +137,22 @@ export type Page = {
   blocks: Block[]
 }
 
+export type PlannerKind = 'school' | 'curriculum' | 'life'
+
+export type PlannerTask = {
+  id: string
+  date: string
+  start?: string
+  end?: string
+  title: string
+  note: string
+  kind: PlannerKind
+  courseId?: string
+  topic?: string
+  schoolId?: string
+  done: boolean
+}
+
 export type Store = {
   checked: Record<string, boolean>
   doing: Record<string, boolean>
@@ -152,12 +168,15 @@ export type Store = {
   manuscripts: Manuscript[]
   projects: Project[]
   quran: QuranNote[]
+  plannerTasks: PlannerTask[]
+  plannerDone: Record<string, boolean>
 }
 
 export type Route =
   | { view: 'home' }
   | { view: 'school'; id: string }
   | { view: 'course'; id: string }
+  | { view: 'planner' }
   | { view: 'semester' }
   | { view: 'week' }
   | { view: 'year' }

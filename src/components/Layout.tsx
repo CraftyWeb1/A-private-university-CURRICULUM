@@ -3,6 +3,7 @@ import { href, type Path } from '../lib/route'
 import { useStore } from '../lib/store'
 
 const PLAN = [
+  { href: href('planner'), label: 'Planner', view: 'planner' },
   { href: href('semester'), label: 'This semester', view: 'semester' },
   { href: href('week'), label: 'This week', view: 'week' },
   { href: href('year'), label: 'Year one', view: 'year' },
