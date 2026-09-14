@@ -137,6 +137,64 @@ export type Page = {
   blocks: Block[]
 }
 
+export type CollegeKind = 'exam' | 'due' | 'quiz' | 'note' | 'admin' | 'holiday' | 'class' | 'activity'
+
+export type CollegeEffect = 'off' | 'monday'
+
+export type CollegeCourse = {
+  code: string
+  short: string
+  title: string
+  teacher: string
+  room: string
+  note: string
+  color: string
+  schoolHint: string
+}
+
+export type WeeklySlot = {
+  id: string
+  weekday: number
+  start: string
+  end: string
+  course: string
+  title: string
+  room: string
+  teacher: string
+  kind: 'T' | 'L' | 'activity'
+}
+
+export type CollegeEvent = {
+  id: string
+  date: string
+  endDate?: string
+  start?: string
+  end?: string
+  course: string
+  title: string
+  percent?: string
+  kind: CollegeKind
+  location?: string
+  note?: string
+  confirm?: boolean
+  effect?: CollegeEffect
+}
+
+export type CollegeSession = {
+  name: string
+  college: string
+  program: string
+  start: string
+  end: string
+}
+
+export type CollegeState = {
+  session: CollegeSession
+  courses: CollegeCourse[]
+  slots: WeeklySlot[]
+  events: CollegeEvent[]
+}
+
 export type PlannerKind = 'school' | 'curriculum' | 'life'
 
 export type PlannerTask = {
@@ -170,6 +228,7 @@ export type Store = {
   quran: QuranNote[]
   plannerTasks: PlannerTask[]
   plannerDone: Record<string, boolean>
+  college: CollegeState
 }
 
 export type Route =

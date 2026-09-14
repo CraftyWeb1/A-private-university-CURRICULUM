@@ -1,5 +1,6 @@
 import { seedCourses, seedSchools } from '../data/curriculum'
 import { STARTER_BOOKS, STARTER_CURIOSITY, STARTER_PROJECTS } from '../data/life'
+import { seedCollege } from '../data/planner'
 import type { Store } from './types'
 
 const KEY = 'dar-al-ilm-v1'
@@ -37,6 +38,7 @@ export const emptyStore = (): Store => ({
   quran: [],
   plannerTasks: [],
   plannerDone: {},
+  college: seedCollege(),
 })
 
 export function loadStore(): Store {
@@ -64,6 +66,15 @@ export function loadStore(): Store {
       quran: parsed.quran ?? [],
       plannerTasks: parsed.plannerTasks ?? [],
       plannerDone: parsed.plannerDone ?? {},
+      college:
+        parsed.college?.courses?.length && parsed.college.slots?.length
+          ? {
+              session: { ...base.college.session, ...parsed.college.session },
+              courses: parsed.college.courses,
+              slots: parsed.college.slots,
+              events: parsed.college.events ?? base.college.events,
+            }
+          : base.college,
     }
   } catch {
     return base
@@ -106,5 +117,14 @@ export function parseImportedStore(text: string): Store {
     quran: parsed.quran ?? [],
     plannerTasks: parsed.plannerTasks ?? [],
     plannerDone: parsed.plannerDone ?? {},
+    college:
+      parsed.college?.courses?.length && parsed.college.slots?.length
+        ? {
+            session: { ...base.college.session, ...parsed.college.session },
+            courses: parsed.college.courses,
+            slots: parsed.college.slots,
+            events: parsed.college.events ?? [],
+          }
+        : base.college,
   }
 }

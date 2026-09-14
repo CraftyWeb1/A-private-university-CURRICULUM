@@ -937,7 +937,7 @@ h3 { font-size: 22px; }
   z-index: 1;
 }
 
-.blk {
+.planner-lane .blk {
   position: absolute;
   left: 4px;
   right: 4px;
@@ -948,6 +948,19 @@ h3 { font-size: 22px; }
   font-size: 11px;
   line-height: 1.25;
   box-shadow: 0 4px 0 rgba(92, 42, 58, 0.08);
+  text-align: left;
+  border: 0;
+  display: block;
+  width: auto;
+}
+
+.planner-editing .blk:hover,
+.planner-editing .chip-ev:hover {
+  outline: 2px dashed var(--moss);
+}
+
+.field input[type='checkbox'] {
+  width: auto;
 }
 
 .blk b {

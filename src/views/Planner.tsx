@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
+import { AddLine, Editable, IconX } from '../components/Editable'
 import { topicKey } from '../data/curriculum'
 import {
-  COLLEGE_COURSES,
+  EVENT_KINDS,
+  WEEKDAYS,
   addDays,
   collegeWeekOf,
   eventsOn,
@@ -11,6 +13,7 @@ import {
   minutes,
   parseIso,
   pocketsOn,
+  seedCollege,
   slotsOn,
   startOfMonth,
   startOfWeek,
@@ -18,7 +21,7 @@ import {
 } from '../data/planner'
 import { href } from '../lib/route'
 import { useStore } from '../lib/store'
-import type { PlannerKind, PlannerTask } from '../lib/types'
+import type { CollegeEvent, CollegeKind, PlannerKind, PlannerTask, WeeklySlot } from '../lib/types'
 import { Rule } from '../components/ui'
 
 const DAYS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.']
@@ -42,6 +45,7 @@ const PX = 0.78
 
 type Mode = 'week' | 'month' | 'courses'
 type Draft = {
+  id?: string
   date: string
   start: string
   end: string
@@ -52,6 +56,9 @@ type Draft = {
   courseId: string
   topic: string
 }
+type Sheet =
+  | { type: 'slot'; slot: WeeklySlot }
+  | { type: 'event'; event: CollegeEvent }
 
 function emptyDraft(date: string, patch: Partial<Draft> = {}): Draft {
   return {
@@ -84,22 +91,37 @@ export function PlannerPage() {
   const {
     store,
     addPlannerTask,
+    updatePlannerTask,
     togglePlannerTask,
     removePlannerTask,
     togglePlannerEvent,
     setTopicStatus,
+    updateCollegeSession,
+    addCollegeCourse,
+    updateCollegeCourse,
+    removeCollegeCourse,
+    addCollegeSlot,
+    updateCollegeSlot,
+    removeCollegeSlot,
+    addCollegeEvent,
+    updateCollegeEvent,
+    removeCollegeEvent,
+    resetCollege,
   } = useStore()
+  const college = store.college ?? seedCollege()
   const [mode, setMode] = useState<Mode>('week')
+  const [editing, setEditing] = useState(false)
   const [cursor, setCursor] = useState(() => new Date())
   const [selected, setSelected] = useState(iso(new Date()))
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [sheet, setSheet] = useState<Sheet | null>(null)
   const [query, setQuery] = useState('')
 
   const today = iso(new Date())
   const weekStart = startOfWeek(cursor)
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const ped = collegeWeekOf(cursor)
-  const coming = upcomingEvents(new Date(), 21)
+  const coming = upcomingEvents(college.events, new Date(), 21)
   const nextExam = coming.find((e) => e.kind === 'exam')
   const tasks = store.plannerTasks ?? []
   const doneMap = store.plannerDone ?? {}
@@ -111,10 +133,10 @@ export function PlannerPage() {
   }, [cursor])
 
   const selectedDate = parseIso(selected)
-  const selectedSlots = slotsOn(selectedDate)
-  const selectedEvents = eventsOn(selectedDate)
+  const selectedSlots = slotsOn(selectedDate, college.slots, college.events, college.session)
+  const selectedEvents = eventsOn(selectedDate, college.events)
   const selectedTasks = tasks.filter((t) => t.date === selected)
-  const selectedPockets = pocketsOn(selectedDate)
+  const selectedPockets = pocketsOn(selectedDate, college.slots, college.events, college.session)
 
   const schools = store.schools
   const coursesForSchool = store.courses.filter((c) => !draft?.schoolId || c.school === draft.schoolId)
@@ -141,7 +163,7 @@ export function PlannerPage() {
       draft.title.trim() ||
       draft.topic.trim() ||
       (draft.kind === 'curriculum' ? 'Un morceau de curriculum' : 'Nouvelle tâche')
-    addPlannerTask({
+    const payload = {
       date: draft.date,
       start: draft.start || undefined,
       end: draft.end || undefined,
@@ -151,13 +173,43 @@ export function PlannerPage() {
       schoolId: draft.schoolId || undefined,
       courseId: draft.courseId || undefined,
       topic: draft.topic || undefined,
-    })
-    if (draft.courseId && draft.topic) {
+    }
+    if (draft.id) updatePlannerTask(draft.id, payload)
+    else addPlannerTask(payload)
+    if (!draft.id && draft.courseId && draft.topic) {
       setTopicStatus(topicKey(draft.courseId, draft.topic), 'doing')
     }
     setSelected(draft.date)
     setDraft(null)
   }
+
+  function openTask(task: PlannerTask) {
+    setDraft({
+      id: task.id,
+      date: task.date,
+      start: task.start ?? '',
+      end: task.end ?? '',
+      title: task.title,
+      note: task.note,
+      kind: task.kind,
+      schoolId: task.schoolId ?? '',
+      courseId: task.courseId ?? '',
+      topic: task.topic ?? '',
+    })
+  }
+
+  function onClassClick(slotId: string) {
+    if (!editing) return
+    const slot = college.slots.find((s) => s.id === slotId)
+    if (slot) setSheet({ type: 'slot', slot: { ...slot } })
+  }
+
+  function onEventClick(event: CollegeEvent) {
+    if (editing) setSheet({ type: 'event', event: { ...event } })
+    else togglePlannerEvent(event.id)
+  }
+
+  const doubleDays = weekDays.filter((d) => eventsOn(d, college.events).filter((e) => e.kind === 'exam').length >= 2)
 
   function flipTask(task: PlannerTask) {
     togglePlannerTask(task.id)
@@ -166,15 +218,15 @@ export function PlannerPage() {
     }
   }
 
-  const heavyWeek = weekDays.some((d) => iso(d) === '2026-10-08')
+  const heavyWeek = doubleDays.length > 0
 
   return (
     <div>
-      <span className="kicker">Maisonneuve · session A2026</span>
+      <span className="kicker">{college.session.college} · {college.session.name}</span>
       <h1>Planner</h1>
       <p className="lede">
-        Tes sept cours, tes travaux, et les petits trous roses où coller du Dar al-Ilm — sans
-        prétendre que le collège n’existe pas.
+        Tes cours, tes travaux, et les petits trous roses où coller du Dar al-Ilm. Tout se
+        modifie — un intra déplacé, un lab trop long, une erreur : tu corriges, l’agenda suit.
       </p>
 
       <div className="row planner-toolbar" style={{ marginTop: 18, justifyContent: 'space-between' }}>
@@ -223,6 +275,13 @@ export function PlannerPage() {
           >
             →
           </button>
+          <button
+            className={editing ? 'gold' : 'ghost'}
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+          >
+            {editing ? 'Terminé' : 'Modifier'}
+          </button>
           <button className="gold" type="button" onClick={() => openDraft(selected, { kind: 'life' })}>
             + Tâche
           </button>
@@ -252,17 +311,106 @@ export function PlannerPage() {
             Double seuil
           </span>
           <p className="small" style={{ marginBottom: 0 }}>
-            Web 2, Hybrides, IoT, Sécurité : 60 % au cours et 50 % aux épreuves surveillées, sinon
-            49 % max.
+            {college.session.start} → {college.session.end}. Clique Modifier si une date de session
+            a bougé.
           </p>
         </article>
       </div>
 
+      {editing ? (
+        <div className="callout-pink" style={{ marginTop: 16 }}>
+          <strong>Mode crayon.</strong>
+          Clique un cours, une éval ou une tâche pour la corriger. Les trous roses se recollent
+          tout seuls. Tu peux aussi ajouter un bloc d’horaire ou une remise.
+          <div className="grid-2" style={{ marginTop: 10 }}>
+            <label className="field">
+              <span>Début de session</span>
+              <input
+                type="date"
+                value={college.session.start}
+                onChange={(e) => updateCollegeSession({ start: e.target.value })}
+              />
+            </label>
+            <label className="field">
+              <span>Fin de session</span>
+              <input
+                type="date"
+                value={college.session.end}
+                onChange={(e) => updateCollegeSession({ end: e.target.value })}
+              />
+            </label>
+          </div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => {
+                const weekday =
+                  selectedDate.getDay() === 0 || selectedDate.getDay() === 6 ? 1 : selectedDate.getDay()
+                const id = addCollegeSlot({ weekday })
+                setSheet({
+                  type: 'slot',
+                  slot: {
+                    id,
+                    weekday,
+                    start: '09:10',
+                    end: '12:10',
+                    course: college.courses[0]?.code ?? 'Collège',
+                    title: 'Nouveau bloc',
+                    room: '',
+                    teacher: '',
+                    kind: 'T',
+                  },
+                })
+              }}
+            >
+              + Horaire
+            </button>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => {
+                const id = addCollegeEvent({ date: selected, kind: 'due', title: 'Nouvelle remise' })
+                setSheet({
+                  type: 'event',
+                  event: {
+                    id,
+                    date: selected,
+                    course: college.courses[0]?.code ?? 'Collège',
+                    title: 'Nouvelle remise',
+                    kind: 'due',
+                  },
+                })
+              }}
+            >
+              + Éval
+            </button>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => {
+                if (!window.confirm('Revenir au planner PDF d’origine ? Tes corrections collège seront effacées, pas tes tâches.')) return
+                resetCollege()
+              }}
+            >
+              Revenir au PDF
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {heavyWeek ? (
         <div className="callout-pink" style={{ marginTop: 16 }}>
-          <strong>8 octobre — deux intras le même jour.</strong>
-          Hybrides 09:10–12:10 (30 %) et Sécurité 16:10–18:00 (25 %). Intra Web 2 le 13 oct, jour
-          JSR — à confirmer (report probable 15–16 oct).
+          <strong>Jour chargé — deux examens le même jour.</strong>
+          {doubleDays.map((d) => {
+            const exams = eventsOn(d, college.events).filter((e) => e.kind === 'exam')
+            return (
+              <span key={iso(d)}>
+                {' '}
+                {fmtDay(d)} : {exams.map((e) => e.title).join(' · ')}.
+              </span>
+            )
+          })}
         </div>
       ) : null}
 
@@ -271,9 +419,9 @@ export function PlannerPage() {
           <Rule>Cette semaine</Rule>
           <p className="muted small">
             {fmtDay(weekDays[0])} → {fmtDay(weekDays[6])}
-            {inSession(cursor) ? ' · grille présentielle' : ''}
+            {inSession(cursor, college.session) ? ' · grille présentielle' : ''}
           </p>
-          <div className="planner-week">
+          <div className={editing ? 'planner-week planner-editing' : 'planner-week'}>
             <div className="planner-hours">
               <div className="planner-head" />
               <div className="all-day" />
@@ -286,10 +434,10 @@ export function PlannerPage() {
             {weekDays.map((day) => {
               const key = iso(day)
               const isToday = key === today
-              const slots = slotsOn(day)
-              const evs = eventsOn(day)
+              const slots = slotsOn(day, college.slots, college.events, college.session)
+              const evs = eventsOn(day, college.events)
               const dayTasks = tasks.filter((t) => t.date === key)
-              const pockets = pocketsOn(day)
+              const pockets = pocketsOn(day, college.slots, college.events, college.session)
               const timed = [
                 ...slots.map((s) => ({
                   key: s.id,
@@ -337,7 +485,7 @@ export function PlannerPage() {
                           key={e.id}
                           className={`chip-ev ${e.kind} ${doneMap[e.id] ? 'done' : ''}`}
                           type="button"
-                          onClick={() => togglePlannerEvent(e.id)}
+                          onClick={() => onEventClick(e)}
                         >
                           {e.title}
                         </button>
@@ -349,7 +497,7 @@ export function PlannerPage() {
                           key={t.id}
                           className={`chip-ev ${t.kind} ${t.done ? 'done' : ''}`}
                           type="button"
-                          onClick={() => flipTask(t)}
+                          onClick={() => (editing ? openTask(t) : flipTask(t))}
                         >
                           {t.title}
                         </button>
@@ -382,17 +530,35 @@ export function PlannerPage() {
                       </button>
                     ))}
                     {timed.map((b) => (
-                      <div
+                      <button
                         key={b.key}
                         className={`blk ${b.cls}`}
+                        type="button"
                         style={{ top: top(b.start), height: height(b.start, b.end) }}
+                        onClick={() => {
+                          const slot = college.slots.find((s) => s.id === b.key)
+                          if (slot) {
+                            onClassClick(slot.id)
+                            return
+                          }
+                          const ev = college.events.find((e) => e.id === b.key)
+                          if (ev) {
+                            onEventClick(ev)
+                            return
+                          }
+                          const task = dayTasks.find((t) => t.id === b.key)
+                          if (task) {
+                            if (editing) openTask(task)
+                            else flipTask(task)
+                          }
+                        }}
                       >
                         <b>{b.title}</b>
                         <span>
                           {b.start}–{b.end}
                           {b.meta ? ` · ${b.meta}` : ''}
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -415,7 +581,7 @@ export function PlannerPage() {
               {monthGrid.map((day) => {
                 const key = iso(day)
                 const outside = day.getMonth() !== cursor.getMonth()
-                const evs = eventsOn(day)
+                const evs = eventsOn(day, college.events)
                 const dayTasks = tasks.filter((t) => t.date === key)
                 const chips = [
                   ...evs.map((e) => ({ id: e.id, title: e.title, kind: e.kind })),
@@ -449,33 +615,51 @@ export function PlannerPage() {
               <ul className="list">
                 {selectedSlots.map((s) => (
                   <li key={s.id}>
-                    <span>
-                      <b>
-                        {s.start}–{s.end}
-                      </b>{' '}
-                      {s.title}
-                      <div className="small muted">
-                        {s.room} {s.teacher ? `· ${s.teacher}` : ''}
-                      </div>
+                    <span className="edit-row">
+                      <span>
+                        <b>
+                          {s.start}–{s.end}
+                        </b>{' '}
+                        {s.title}
+                        <div className="small muted">
+                          {s.room} {s.teacher ? `· ${s.teacher}` : ''}
+                        </div>
+                      </span>
+                      {editing ? (
+                        <button className="ghost" type="button" onClick={() => onClassClick(s.id)}>
+                          Modifier
+                        </button>
+                      ) : null}
                     </span>
                   </li>
                 ))}
                 {selectedEvents.map((e) => (
                   <li key={e.id}>
-                    <span>
+                    <span className="edit-row">
                       <button
                         className={`check ${doneMap[e.id] ? 'filled' : ''}`}
                         type="button"
                         onClick={() => togglePlannerEvent(e.id)}
                         aria-label="Marquer"
-                      />{' '}
-                      {e.start ? `${e.start} · ` : ''}
-                      {e.title}
-                      {e.percent ? ` (${e.percent})` : ''}
-                      {e.confirm ? ' · à confirmer' : ''}
-                      <div className="small muted">
-                        {kindLabel(e.kind)} · {e.course}
-                      </div>
+                      />
+                      <span>
+                        {e.start ? `${e.start} · ` : ''}
+                        {e.title}
+                        {e.percent ? ` (${e.percent})` : ''}
+                        {e.confirm ? ' · à confirmer' : ''}
+                        <div className="small muted">
+                          {kindLabel(e.kind)} · {e.course}
+                        </div>
+                      </span>
+                      {editing ? (
+                        <button
+                          className="ghost"
+                          type="button"
+                          onClick={() => setSheet({ type: 'event', event: { ...e } })}
+                        >
+                          Modifier
+                        </button>
+                      ) : null}
                     </span>
                   </li>
                 ))}
@@ -495,6 +679,9 @@ export function PlannerPage() {
                           {t.topic ? ` · ${t.topic}` : ''}
                         </div>
                       </span>
+                      <button className="ghost" type="button" onClick={() => openTask(t)}>
+                        Modifier
+                      </button>
                       <button className="icon-x" type="button" onClick={() => removePlannerTask(t.id)}>
                         ×
                       </button>
@@ -533,22 +720,34 @@ export function PlannerPage() {
 
       {mode === 'courses' ? (
         <>
-          <Rule>Les sept cours</Rule>
+          <Rule>Tes cours</Rule>
           <div className="grid-2">
-            {COLLEGE_COURSES.map((c) => {
+            {college.courses.map((c) => {
               const next = coming.filter((e) => e.course === c.code).slice(0, 4)
               return (
                 <article className="panel" key={c.code}>
-                  <span className="kicker" style={{ color: c.color }}>
-                    {c.code}
-                  </span>
+                  <div className="edit-row">
+                    <span className="kicker" style={{ color: c.color }}>
+                      <Editable value={c.code} onChange={(code) => updateCollegeCourse(c.code, { code })} />
+                    </span>
+                    {editing ? <IconX onClick={() => removeCollegeCourse(c.code)} /> : null}
+                  </div>
                   <h3>
-                    {c.short} · {c.title}
+                    <Editable value={c.short} onChange={(short) => updateCollegeCourse(c.code, { short })} />
+                    {' · '}
+                    <Editable value={c.title} onChange={(title) => updateCollegeCourse(c.code, { title })} />
                   </h3>
                   <p className="muted small">
-                    {c.teacher} · {c.room}
+                    <Editable value={c.teacher} onChange={(teacher) => updateCollegeCourse(c.code, { teacher })} placeholder="Prof" />
+                    {' · '}
+                    <Editable value={c.room} onChange={(room) => updateCollegeCourse(c.code, { room })} placeholder="Local" />
                   </p>
-                  <p>{c.note}</p>
+                  <Editable
+                    multiline
+                    value={c.note}
+                    onChange={(note) => updateCollegeCourse(c.code, { note })}
+                    placeholder="Notes du plan de cours"
+                  />
                   <ul className="list">
                     {next.length ? (
                       next.map((e) => (
@@ -556,7 +755,18 @@ export function PlannerPage() {
                           <span>
                             {fmtDay(parseIso(e.date))} · {e.title}
                           </span>
-                          <span className="small">{e.percent || kindLabel(e.kind)}</span>
+                          <span className="row">
+                            <span className="small">{e.percent || kindLabel(e.kind)}</span>
+                            {editing ? (
+                              <button
+                                className="ghost"
+                                type="button"
+                                onClick={() => setSheet({ type: 'event', event: { ...e } })}
+                              >
+                                Modifier
+                              </button>
+                            ) : null}
+                          </span>
                         </li>
                       ))
                     ) : (
@@ -566,12 +776,26 @@ export function PlannerPage() {
                     )}
                   </ul>
                   <a className="gold" href={href(`school/${c.schoolHint}`)}>
-                    Relier à {c.schoolHint === 'career' ? 'Career' : c.schoolHint === 'literature' ? 'Literature' : 'Intellect'}
+                    Relier à{' '}
+                    {c.schoolHint === 'career'
+                      ? 'Career'
+                      : c.schoolHint === 'literature'
+                        ? 'Literature'
+                        : c.schoolHint === 'islam'
+                          ? 'Deen'
+                          : 'Intellect'}
                   </a>
                 </article>
               )
             })}
           </div>
+          <AddLine
+            label="Ajouter un cours"
+            onClick={() => {
+              addCollegeCourse()
+              setEditing(true)
+            }}
+          />
         </>
       ) : null}
 
@@ -609,13 +833,378 @@ export function PlannerPage() {
                     {e.confirm ? ' · à confirmer' : ''}
                   </div>
                 </span>
-                <span>{e.percent || ''}</span>
+                <span className="row">
+                  <span>{e.percent || ''}</span>
+                  {editing ? (
+                    <button className="ghost" type="button" onClick={() => setSheet({ type: 'event', event: { ...e } })}>
+                      Modifier
+                    </button>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>
         </>
       ) : null}
 
+      {sheet ? (
+        <div className="composer-back" onClick={() => setSheet(null)}>
+          {sheet.type === 'slot' ? (
+            <form
+              className="panel composer"
+              onClick={(e) => e.stopPropagation()}
+              onSubmit={(e) => {
+                e.preventDefault()
+                updateCollegeSlot(sheet.slot.id, sheet.slot)
+                setSheet(null)
+              }}
+            >
+              <span className="kicker">Horaire de semaine</span>
+              <h3>Ce bloc de cours</h3>
+              <p className="muted small">Change l’heure ou le jour : la grille et les trous se recollent.</p>
+              <div className="grid-2">
+                <label className="field">
+                  <span>Jour</span>
+                  <select
+                    value={sheet.slot.weekday}
+                    onChange={(e) => {
+                      const weekday = Number(e.target.value)
+                      const next = { ...sheet.slot, weekday }
+                      setSheet({ type: 'slot', slot: next })
+                      updateCollegeSlot(next.id, { weekday })
+                    }}
+                  >
+                    {WEEKDAYS.map((d) => (
+                      <option key={d.n} value={d.n}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Cours</span>
+                  <select
+                    value={sheet.slot.course}
+                    onChange={(e) => {
+                      const course = e.target.value
+                      const meta = college.courses.find((c) => c.code === course)
+                      const next = {
+                        ...sheet.slot,
+                        course,
+                        title: meta ? `${meta.short} · ${sheet.slot.kind === 'L' ? 'lab' : sheet.slot.kind === 'T' ? 'théorie' : 'activité'}` : sheet.slot.title,
+                        room: meta?.room ?? sheet.slot.room,
+                        teacher: meta?.teacher ?? sheet.slot.teacher,
+                      }
+                      setSheet({ type: 'slot', slot: next })
+                      updateCollegeSlot(next.id, next)
+                    }}
+                  >
+                    <option value="Collège">Collège</option>
+                    {college.courses.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} · {c.short}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Début</span>
+                  <input
+                    type="time"
+                    value={sheet.slot.start}
+                    onChange={(e) => {
+                      const start = e.target.value
+                      setSheet({ type: 'slot', slot: { ...sheet.slot, start } })
+                      updateCollegeSlot(sheet.slot.id, { start })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Fin</span>
+                  <input
+                    type="time"
+                    value={sheet.slot.end}
+                    onChange={(e) => {
+                      const end = e.target.value
+                      setSheet({ type: 'slot', slot: { ...sheet.slot, end } })
+                      updateCollegeSlot(sheet.slot.id, { end })
+                    }}
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Titre</span>
+                <input
+                  value={sheet.slot.title}
+                  onChange={(e) => {
+                    const title = e.target.value
+                    setSheet({ type: 'slot', slot: { ...sheet.slot, title } })
+                    updateCollegeSlot(sheet.slot.id, { title })
+                  }}
+                />
+              </label>
+              <div className="grid-2">
+                <label className="field">
+                  <span>Local</span>
+                  <input
+                    value={sheet.slot.room}
+                    onChange={(e) => {
+                      const room = e.target.value
+                      setSheet({ type: 'slot', slot: { ...sheet.slot, room } })
+                      updateCollegeSlot(sheet.slot.id, { room })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Prof</span>
+                  <input
+                    value={sheet.slot.teacher}
+                    onChange={(e) => {
+                      const teacher = e.target.value
+                      setSheet({ type: 'slot', slot: { ...sheet.slot, teacher } })
+                      updateCollegeSlot(sheet.slot.id, { teacher })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Type</span>
+                  <select
+                    value={sheet.slot.kind}
+                    onChange={(e) => {
+                      const kind = e.target.value as WeeklySlot['kind']
+                      setSheet({ type: 'slot', slot: { ...sheet.slot, kind } })
+                      updateCollegeSlot(sheet.slot.id, { kind })
+                    }}
+                  >
+                    <option value="T">Théorie</option>
+                    <option value="L">Laboratoire</option>
+                    <option value="activity">Activité / pause</option>
+                  </select>
+                </label>
+              </div>
+              <div className="row">
+                <button className="gold" type="submit">
+                  Enregistrer
+                </button>
+                <button className="ghost" type="button" onClick={() => setSheet(null)}>
+                  Fermer
+                </button>
+                <button
+                  className="ghost danger"
+                  type="button"
+                  onClick={() => {
+                    removeCollegeSlot(sheet.slot.id)
+                    setSheet(null)
+                  }}
+                >
+                  Supprimer
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form
+              className="panel composer"
+              onClick={(e) => e.stopPropagation()}
+              onSubmit={(e) => {
+                e.preventDefault()
+                updateCollegeEvent(sheet.event.id, sheet.event)
+                setSheet(null)
+              }}
+            >
+              <span className="kicker">Éval / note / congé</span>
+              <h3>Corriger cette date</h3>
+              <p className="muted small">Un intra reporté, un % changé, un congé : le mois et la semaine bougent avec.</p>
+              <label className="field">
+                <span>Titre</span>
+                <input
+                  value={sheet.event.title}
+                  onChange={(e) => {
+                    const title = e.target.value
+                    const next = { ...sheet.event, title }
+                    setSheet({ type: 'event', event: next })
+                    updateCollegeEvent(next.id, { title })
+                  }}
+                />
+              </label>
+              <div className="grid-2">
+                <label className="field">
+                  <span>Date</span>
+                  <input
+                    type="date"
+                    value={sheet.event.date}
+                    onChange={(e) => {
+                      const date = e.target.value
+                      const next = { ...sheet.event, date }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { date })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Jusqu’au (optionnel)</span>
+                  <input
+                    type="date"
+                    value={sheet.event.endDate ?? ''}
+                    onChange={(e) => {
+                      const endDate = e.target.value || undefined
+                      const next = { ...sheet.event, endDate }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { endDate })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Début</span>
+                  <input
+                    type="time"
+                    value={sheet.event.start ?? ''}
+                    onChange={(e) => {
+                      const start = e.target.value || undefined
+                      const next = { ...sheet.event, start }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { start })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Fin</span>
+                  <input
+                    type="time"
+                    value={sheet.event.end ?? ''}
+                    onChange={(e) => {
+                      const end = e.target.value || undefined
+                      const next = { ...sheet.event, end }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { end })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Cours</span>
+                  <select
+                    value={sheet.event.course}
+                    onChange={(e) => {
+                      const course = e.target.value
+                      const next = { ...sheet.event, course }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { course })
+                    }}
+                  >
+                    <option value="Collège">Collège</option>
+                    {college.courses.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} · {c.short}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Type</span>
+                  <select
+                    value={sheet.event.kind}
+                    onChange={(e) => {
+                      const kind = e.target.value as CollegeKind
+                      const next = { ...sheet.event, kind }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { kind })
+                    }}
+                  >
+                    {EVENT_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {kindLabel(k)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>%</span>
+                  <input
+                    value={sheet.event.percent ?? ''}
+                    placeholder="30%"
+                    onChange={(e) => {
+                      const percent = e.target.value || undefined
+                      const next = { ...sheet.event, percent }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { percent })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Local</span>
+                  <input
+                    value={sheet.event.location ?? ''}
+                    onChange={(e) => {
+                      const location = e.target.value || undefined
+                      const next = { ...sheet.event, location }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { location })
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span>Effet sur l’horaire</span>
+                  <select
+                    value={sheet.event.effect ?? ''}
+                    onChange={(e) => {
+                      const effect = (e.target.value || undefined) as CollegeEvent['effect']
+                      const next = { ...sheet.event, effect }
+                      setSheet({ type: 'event', event: next })
+                      updateCollegeEvent(next.id, { effect })
+                    }}
+                  >
+                    <option value="">Aucun</option>
+                    <option value="off">Pas de cours ce jour</option>
+                    <option value="monday">Horaire du lundi</option>
+                  </select>
+                </label>
+              </div>
+              <label className="field">
+                <span>Note</span>
+                <textarea
+                  value={sheet.event.note ?? ''}
+                  onChange={(e) => {
+                    const note = e.target.value || undefined
+                    const next = { ...sheet.event, note }
+                    setSheet({ type: 'event', event: next })
+                    updateCollegeEvent(next.id, { note })
+                  }}
+                />
+              </label>
+              <label className="row">
+                <input
+                  type="checkbox"
+                  checked={!!sheet.event.confirm}
+                  onChange={(e) => {
+                    const confirm = e.target.checked
+                    const next = { ...sheet.event, confirm }
+                    setSheet({ type: 'event', event: next })
+                    updateCollegeEvent(next.id, { confirm })
+                  }}
+                />
+                <span>À confirmer en classe</span>
+              </label>
+              <div className="row">
+                <button className="gold" type="submit">
+                  Enregistrer
+                </button>
+                <button className="ghost" type="button" onClick={() => setSheet(null)}>
+                  Fermer
+                </button>
+                <button
+                  className="ghost danger"
+                  type="button"
+                  onClick={() => {
+                    removeCollegeEvent(sheet.event.id)
+                    setSheet(null)
+                  }}
+                >
+                  Supprimer
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      ) : null}
       {draft ? (
         <div className="composer-back" onClick={() => setDraft(null)}>
           <form
@@ -626,8 +1215,14 @@ export function PlannerPage() {
               saveDraft()
             }}
           >
-            <span className="kicker">Coller dans l’agenda</span>
-            <h3>{draft.kind === 'curriculum' ? 'Un morceau de curriculum' : 'Une tâche à toi'}</h3>
+            <span className="kicker">{draft.id ? 'Corriger' : 'Coller dans l’agenda'}</span>
+            <h3>
+              {draft.id
+                ? 'Cette tâche'
+                : draft.kind === 'curriculum'
+                  ? 'Un morceau de curriculum'
+                  : 'Une tâche à toi'}
+            </h3>
             <div className="grid-2">
               <label className="field">
                 <span>Quand</span>
@@ -740,11 +1335,23 @@ export function PlannerPage() {
             </label>
             <div className="row">
               <button className="gold" type="submit">
-                Coller
+                {draft.id ? 'Enregistrer' : 'Coller'}
               </button>
               <button className="ghost" type="button" onClick={() => setDraft(null)}>
                 Annuler
               </button>
+              {draft.id ? (
+                <button
+                  className="ghost danger"
+                  type="button"
+                  onClick={() => {
+                    removePlannerTask(draft.id!)
+                    setDraft(null)
+                  }}
+                >
+                  Supprimer
+                </button>
+              ) : null}
             </div>
           </form>
         </div>

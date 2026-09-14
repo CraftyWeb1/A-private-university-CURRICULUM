@@ -1,10 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TONES, topicKey } from '../data/curriculum'
+import { seedCollege } from '../data/planner'
 import { exportStore, loadStore, parseImportedStore, saveStore } from './storage'
 import type {
   Block,
   BlockType,
   Book,
+  CollegeCourse,
+  CollegeEvent,
+  CollegeSession,
   Course,
   DailyEntry,
   LearningKind,
@@ -18,6 +22,7 @@ import type {
   Store,
   TopicStatus,
   ViewKind,
+  WeeklySlot,
 } from './types'
 
 export function uid() {
@@ -79,6 +84,17 @@ type StoreApi = {
   removePlannerTask: (id: string) => void
   togglePlannerTask: (id: string) => void
   togglePlannerEvent: (id: string) => void
+  updateCollegeSession: (patch: Patch<CollegeSession>) => void
+  addCollegeCourse: () => string
+  updateCollegeCourse: (code: string, patch: Patch<CollegeCourse>) => void
+  removeCollegeCourse: (code: string) => void
+  addCollegeSlot: (slot?: Partial<WeeklySlot>) => string
+  updateCollegeSlot: (id: string, patch: Patch<WeeklySlot>) => void
+  removeCollegeSlot: (id: string) => void
+  addCollegeEvent: (event?: Partial<CollegeEvent>) => string
+  updateCollegeEvent: (id: string, patch: Patch<CollegeEvent>) => void
+  removeCollegeEvent: (id: string) => void
+  resetCollege: () => void
   download: () => void
   upload: (text: string) => void
   schoolById: (id: string) => School | undefined
@@ -482,6 +498,118 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ...s,
           plannerDone: { ...s.plannerDone, [id]: !s.plannerDone[id] },
         })),
+      updateCollegeSession: (patch) =>
+        setStore((s) => ({
+          ...s,
+          college: { ...s.college, session: { ...s.college.session, ...patch } },
+        })),
+      addCollegeCourse: () => {
+        const n = String((store.college.courses.length % 9) + 1)
+        const code = `NEW-${n}${uid().slice(0, 3).toUpperCase()}`
+        const colors = ['#c45c78', '#a84562', '#7a3650', '#c9957a', '#8a5a9a', '#d4896a', '#c9a3b8']
+        const course: CollegeCourse = {
+          code,
+          short: 'Nouveau',
+          title: 'Nouveau cours',
+          teacher: '',
+          room: '',
+          note: '',
+          color: colors[store.college.courses.length % colors.length],
+          schoolHint: 'career',
+        }
+        setStore((s) => ({
+          ...s,
+          college: { ...s.college, courses: [...s.college.courses, course] },
+        }))
+        return code
+      },
+      updateCollegeCourse: (code, patch) =>
+        setStore((s) => {
+          const nextCode = patch.code ?? code
+          const courses = s.college.courses.map((c) => (c.code === code ? { ...c, ...patch } : c))
+          const slots =
+            nextCode === code
+              ? s.college.slots
+              : s.college.slots.map((slot) => (slot.course === code ? { ...slot, course: nextCode } : slot))
+          const events =
+            nextCode === code
+              ? s.college.events
+              : s.college.events.map((event) => (event.course === code ? { ...event, course: nextCode } : event))
+          return { ...s, college: { ...s.college, courses, slots, events } }
+        }),
+      removeCollegeCourse: (code) =>
+        setStore((s) => ({
+          ...s,
+          college: {
+            ...s.college,
+            courses: s.college.courses.filter((c) => c.code !== code),
+            slots: s.college.slots.filter((slot) => slot.course !== code),
+          },
+        })),
+      addCollegeSlot: (slot) => {
+        const id = uid()
+        const next: WeeklySlot = {
+          id,
+          weekday: slot?.weekday ?? 1,
+          start: slot?.start ?? '09:10',
+          end: slot?.end ?? '12:10',
+          course: slot?.course ?? store.college.courses[0]?.code ?? 'Collège',
+          title: slot?.title ?? 'Nouveau bloc',
+          room: slot?.room ?? '',
+          teacher: slot?.teacher ?? '',
+          kind: slot?.kind ?? 'T',
+        }
+        setStore((s) => ({ ...s, college: { ...s.college, slots: [...s.college.slots, next] } }))
+        return id
+      },
+      updateCollegeSlot: (id, patch) =>
+        setStore((s) => ({
+          ...s,
+          college: {
+            ...s.college,
+            slots: s.college.slots.map((slot) => (slot.id === id ? { ...slot, ...patch } : slot)),
+          },
+        })),
+      removeCollegeSlot: (id) =>
+        setStore((s) => ({
+          ...s,
+          college: { ...s.college, slots: s.college.slots.filter((slot) => slot.id !== id) },
+        })),
+      addCollegeEvent: (event) => {
+        const id = uid()
+        const next: CollegeEvent = {
+          id,
+          date: event?.date ?? new Date().toISOString().slice(0, 10),
+          endDate: event?.endDate,
+          start: event?.start,
+          end: event?.end,
+          course: event?.course ?? store.college.courses[0]?.code ?? 'Collège',
+          title: event?.title ?? 'Nouvelle évaluation',
+          percent: event?.percent,
+          kind: event?.kind ?? 'due',
+          location: event?.location,
+          note: event?.note,
+          confirm: event?.confirm,
+          effect: event?.effect,
+        }
+        setStore((s) => ({ ...s, college: { ...s.college, events: [...s.college.events, next] } }))
+        return id
+      },
+      updateCollegeEvent: (id, patch) =>
+        setStore((s) => ({
+          ...s,
+          college: {
+            ...s.college,
+            events: s.college.events.map((event) => (event.id === id ? { ...event, ...patch } : event)),
+          },
+        })),
+      removeCollegeEvent: (id) =>
+        setStore((s) => ({
+          ...s,
+          college: { ...s.college, events: s.college.events.filter((event) => event.id !== id) },
+          plannerDone: dropKey(s.plannerDone, id),
+        })),
+      resetCollege: () => setStore((s) => ({ ...s, college: seedCollege() })),
       download: () => exportStore(store),
       upload: (text) => setStore(parseImportedStore(text)),
       schoolById,

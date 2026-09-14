@@ -1,42 +1,13 @@
-export type CollegeKind = 'exam' | 'due' | 'quiz' | 'note' | 'admin' | 'holiday' | 'class' | 'activity'
+import type {
+  CollegeCourse,
+  CollegeEvent,
+  CollegeKind,
+  CollegeSession,
+  CollegeState,
+  WeeklySlot,
+} from '../lib/types'
 
-export type CollegeCourse = {
-  code: string
-  short: string
-  title: string
-  teacher: string
-  room: string
-  note: string
-  color: string
-  schoolHint: string
-}
-
-export type WeeklySlot = {
-  id: string
-  weekday: number
-  start: string
-  end: string
-  course: string
-  title: string
-  room: string
-  teacher: string
-  kind: 'T' | 'L' | 'activity'
-}
-
-export type CollegeEvent = {
-  id: string
-  date: string
-  endDate?: string
-  start?: string
-  end?: string
-  course: string
-  title: string
-  percent?: string
-  kind: CollegeKind
-  location?: string
-  note?: string
-  confirm?: boolean
-}
+export type { CollegeCourse, CollegeEvent, CollegeKind, WeeklySlot } from '../lib/types'
 
 export type PedWeek = {
   n: number
@@ -45,7 +16,7 @@ export type PedWeek = {
   note?: string
 }
 
-export const SESSION = {
+export const SESSION: CollegeSession = {
   name: 'Automne 2026',
   college: 'Collège de Maisonneuve',
   program: 'Techniques de l’informatique',
@@ -144,18 +115,6 @@ export const WEEKLY_SLOTS: WeeklySlot[] = [
   { id: 'fri-p3', weekday: 5, start: '16:10', end: '18:00', course: '420-5D1', title: 'Projet 3 · théorie', room: 'D3744', teacher: 'Encarnacion', kind: 'T' },
 ]
 
-const NO_CLASS = new Set([
-  '2026-09-07',
-  '2026-10-05',
-  '2026-10-12',
-  '2026-10-13',
-  '2026-10-14',
-  '2026-10-15',
-  '2026-10-16',
-])
-
-const MONDAY_INSTEAD = new Set(['2026-09-10', '2026-10-09'])
-
 export const PED_WEEKS: PedWeek[] = [
   { n: 1, start: '2026-08-20', end: '2026-08-26', note: 'Début de session' },
   { n: 2, start: '2026-08-27', end: '2026-09-02' },
@@ -178,7 +137,7 @@ export const PED_WEEKS: PedWeek[] = [
 export const COLLEGE_EVENTS: CollegeEvent[] = [
   { id: 'start', date: '2026-08-20', course: 'Collège', title: 'Début de session', kind: 'admin' },
   { id: 'labour', date: '2026-09-07', course: 'Collège', title: 'Fête du travail — pas de cours', kind: 'holiday' },
-  { id: 'mon-on-thu', date: '2026-09-10', course: 'Collège', title: 'Horaire du lundi', kind: 'admin' },
+  { id: 'mon-on-thu', date: '2026-09-10', course: 'Collège', title: 'Horaire du lundi', kind: 'admin', effect: 'monday' },
   { id: 'jonas', date: '2026-09-14', start: '16:10', end: '18:00', course: '340-P10', title: 'Lecture Jonas — test surprise possible', percent: '3%', kind: 'note', location: 'E4403' },
   { id: 'web-p1s', date: '2026-09-15', start: '09:10', end: '12:10', course: '420-5D2', title: 'Énoncé du projet 1 (équipes 3–4)', percent: '10%', kind: 'note', location: 'D3704' },
   { id: 'lit-para', date: '2026-09-16', start: '12:10', end: '14:10', course: '601-103', title: 'Paragraphe de dissertation', percent: '6%', kind: 'due', location: 'B1151', note: 'Possible aussi ven. 11 si déjà fait.' },
@@ -196,7 +155,7 @@ export const COLLEGE_EVENTS: CollegeEvent[] = [
   { id: 'lit-diss1', date: '2026-10-07', start: '12:10', end: '14:10', course: '601-103', title: 'Dissertation partielle + conférence', percent: '20%', kind: 'exam', location: 'B1151', confirm: true },
   { id: 'hyb-intra', date: '2026-10-08', start: '09:10', end: '12:10', course: '420-5D6', title: 'Intra Hybrides', percent: '30%', kind: 'exam', location: 'D3673', confirm: true, note: 'Même jour que Sécurité.' },
   { id: 'h4k-intra', date: '2026-10-08', start: '16:10', end: '18:00', course: '420-H4K', title: 'Intra Sécurité', percent: '25%', kind: 'exam', location: 'D3744', confirm: true, note: 'Même jour que Hybrides.' },
-  { id: 'horaire-lun-oct', date: '2026-10-09', course: 'Collège', title: 'Horaire du lundi', kind: 'admin' },
+  { id: 'horaire-lun-oct', date: '2026-10-09', course: 'Collège', title: 'Horaire du lundi', kind: 'admin', effect: 'monday' },
   { id: 'thanksgiving', date: '2026-10-12', course: 'Collège', title: 'Action de grâce — pas de cours', kind: 'holiday' },
   { id: 'web-intra', date: '2026-10-13', start: '09:10', end: '12:10', course: '420-5D2', title: 'Intra Web 2', percent: '30%', kind: 'exam', location: 'D3704', confirm: true, note: 'Conflit JSR · report probable 15–16 oct.' },
   { id: 'jsr', date: '2026-10-13', endDate: '2026-10-16', course: 'Collège', title: 'JSR / JRE — pas d’horaire régulier', kind: 'holiday' },
@@ -226,20 +185,30 @@ export const COLLEGE_EVENTS: CollegeEvent[] = [
   { id: 'iot-pres', date: '2026-12-02', course: '420-5D7', title: 'Projet étapes 4–5 + présentation', percent: '14%', kind: 'due', location: 'D3739' },
   { id: 'lit-crea', date: '2026-12-02', course: '601-103', title: 'Projet direction artistique (fantastique)', percent: '15%', kind: 'due' },
   { id: 'h4k-final', date: '2026-12-03', endDate: '2026-12-09', course: '420-H4K', title: 'Épreuve finale Sécurité', percent: '30%', kind: 'exam', location: 'D3744', note: 'Pratique 80 % + théorie 20 %. Peut glisser dans les JES.' },
-  { id: 'jes', date: '2026-12-14', endDate: '2026-12-23', course: 'Collège', title: 'Jours d’évaluations sommatives', kind: 'admin', note: 'Jour FG le 14 déc.' },
+  { id: 'jes', date: '2026-12-14', endDate: '2026-12-23', course: 'Collège', title: 'Jours d’évaluations sommatives', kind: 'admin', note: 'Jour FG le 14 déc.', effect: 'off' },
   { id: 'euf', date: '2026-12-16', course: '601-103', title: 'Épreuve uniforme de français', kind: 'exam', note: 'Si admissible. Confirme sur Omnivox.' },
   { id: 'fin', date: '2026-12-23', course: 'Collège', title: 'Fin de session', kind: 'admin', note: 'Notes le 31 déc.' },
 ]
 
-export const POCKETS: { weekday: number; start: string; end: string; label: string }[] = [
-  { weekday: 1, start: '12:10', end: '16:10', label: 'Après-midi libre' },
-  { weekday: 2, start: '16:10', end: '19:00', label: 'Fin de journée' },
-  { weekday: 3, start: '14:10', end: '19:00', label: 'Après-midi libre' },
-  { weekday: 4, start: '18:00', end: '19:00', label: 'Soirée' },
-  { weekday: 5, start: '14:10', end: '16:10', label: 'Trou avant Projet 3' },
-  { weekday: 5, start: '18:00', end: '19:00', label: 'Soirée' },
-  { weekday: 6, start: '09:00', end: '19:00', label: 'Samedi — curriculum' },
-  { weekday: 0, start: '09:00', end: '19:00', label: 'Dimanche — curriculum' },
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+export function seedCollege(): CollegeState {
+  return {
+    session: { ...SESSION },
+    courses: clone(COLLEGE_COURSES),
+    slots: clone(WEEKLY_SLOTS),
+    events: clone(COLLEGE_EVENTS),
+  }
+}
+
+export const WEEKDAYS = [
+  { n: 1, label: 'Lundi' },
+  { n: 2, label: 'Mardi' },
+  { n: 3, label: 'Mercredi' },
+  { n: 4, label: 'Jeudi' },
+  { n: 5, label: 'Vendredi' },
 ]
 
 export function iso(d: Date) {
@@ -277,22 +246,15 @@ export function minutes(hhmm: string) {
   return (h ?? 0) * 60 + (m ?? 0)
 }
 
-export function inSession(date: Date) {
+export function hhmm(total: number) {
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+export function inSession(date: Date, session: CollegeSession = SESSION) {
   const key = iso(date)
-  return key >= SESSION.start && key <= SESSION.end
-}
-
-export function isNoClass(date: Date) {
-  return NO_CLASS.has(iso(date))
-}
-
-export function collegeWeekOf(date: Date) {
-  const key = iso(date)
-  return PED_WEEKS.find((w) => key >= w.start && key <= w.end) ?? null
-}
-
-export function collegeByCode(code: string) {
-  return COLLEGE_COURSES.find((c) => c.code === code)
+  return key >= session.start && key <= session.end
 }
 
 export function eventHitsDate(event: CollegeEvent, key: string) {
@@ -300,36 +262,99 @@ export function eventHitsDate(event: CollegeEvent, key: string) {
   return key >= event.date && key <= end
 }
 
-export function eventsOn(date: Date) {
+export function eventsOn(date: Date, events: CollegeEvent[]) {
   const key = iso(date)
-  return COLLEGE_EVENTS.filter((e) => eventHitsDate(e, key))
+  return events.filter((e) => eventHitsDate(e, key))
 }
 
-export function slotsOn(date: Date): WeeklySlot[] {
-  if (!inSession(date) || isNoClass(date)) return []
+export function isOffDay(date: Date, events: CollegeEvent[]) {
+  return eventsOn(date, events).some((e) => e.kind === 'holiday' || e.effect === 'off')
+}
+
+export function usesMondayGrid(date: Date, events: CollegeEvent[]) {
+  return eventsOn(date, events).some((e) => e.effect === 'monday')
+}
+
+export function collegeWeekOf(date: Date) {
   const key = iso(date)
-  const weekday = MONDAY_INSTEAD.has(key) ? 1 : date.getDay()
+  return PED_WEEKS.find((w) => key >= w.start && key <= w.end) ?? null
+}
+
+export function collegeByCode(code: string, courses: CollegeCourse[]) {
+  return courses.find((c) => c.code === code)
+}
+
+export function slotsOn(
+  date: Date,
+  slots: WeeklySlot[],
+  events: CollegeEvent[],
+  session: CollegeSession = SESSION,
+): WeeklySlot[] {
+  if (!inSession(date, session) || isOffDay(date, events)) return []
+  const weekday = usesMondayGrid(date, events) ? 1 : date.getDay()
   if (weekday === 0 || weekday === 6) return []
-  return WEEKLY_SLOTS.filter((s) => s.weekday === weekday)
+  return slots.filter((s) => s.weekday === weekday)
 }
 
-export function pocketsOn(date: Date) {
-  if (isNoClass(date)) {
-    return [{ weekday: date.getDay(), start: '09:00', end: '19:00', label: 'Congé — curriculum possible' }]
+export function pocketsOn(
+  date: Date,
+  slots: WeeklySlot[],
+  events: CollegeEvent[],
+  session: CollegeSession = SESSION,
+) {
+  const weekday = date.getDay()
+  if (isOffDay(date, events)) {
+    return [{ weekday, start: '09:00', end: '19:00', label: 'Congé — curriculum possible' }]
   }
-  if (!inSession(date)) return POCKETS.filter((p) => p.weekday === date.getDay())
-  const key = iso(date)
-  const weekday = MONDAY_INSTEAD.has(key) ? 1 : date.getDay()
-  return POCKETS.filter((p) => p.weekday === weekday)
+  const daySlots = slotsOn(date, slots, events, session)
+  if (!daySlots.length && (weekday === 0 || weekday === 6 || !inSession(date, session))) {
+    const label = weekday === 6 ? 'Samedi — curriculum' : weekday === 0 ? 'Dimanche — curriculum' : 'Journée libre'
+    return [{ weekday, start: '09:00', end: '19:00', label }]
+  }
+  const busy = daySlots
+    .map((s) => ({ start: minutes(s.start), end: minutes(s.end) }))
+    .sort((a, b) => a.start - b.start)
+  const merged: { start: number; end: number }[] = []
+  for (const b of busy) {
+    const last = merged[merged.length - 1]
+    if (!last || b.start > last.end) merged.push({ ...b })
+    else last.end = Math.max(last.end, b.end)
+  }
+  const gaps: { weekday: number; start: string; end: string; label: string }[] = []
+  const gridStart = 8 * 60
+  const gridEnd = 19 * 60
+  let cursor = gridStart
+  for (const b of merged) {
+    if (b.start - cursor >= 40) {
+      gaps.push({
+        weekday,
+        start: hhmm(cursor),
+        end: hhmm(b.start),
+        label: cursor >= 16 * 60 ? 'Soirée' : 'Trou — coller du curriculum',
+      })
+    }
+    cursor = Math.max(cursor, b.end)
+  }
+  if (gridEnd - cursor >= 40) {
+    gaps.push({
+      weekday,
+      start: hhmm(cursor),
+      end: hhmm(gridEnd),
+      label: cursor >= 16 * 60 ? 'Soirée' : 'Trou — coller du curriculum',
+    })
+  }
+  return gaps
 }
 
-export function upcomingEvents(from = new Date(), days = 21) {
+export function upcomingEvents(events: CollegeEvent[], from = new Date(), days = 21) {
   const start = iso(from)
   const end = iso(addDays(from, days))
-  return COLLEGE_EVENTS.filter((e) => {
-    const last = e.endDate ?? e.date
-    return last >= start && e.date <= end && e.kind !== 'class'
-  }).sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? '').localeCompare(b.start ?? ''))
+  return events
+    .filter((e) => {
+      const last = e.endDate ?? e.date
+      return last >= start && e.date <= end && e.kind !== 'class'
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? '').localeCompare(b.start ?? ''))
 }
 
 export function kindLabel(kind: CollegeKind | 'curriculum' | 'life' | 'school') {
@@ -348,3 +373,5 @@ export function kindLabel(kind: CollegeKind | 'curriculum' | 'life' | 'school') 
   }
   return map[kind] ?? kind
 }
+
+export const EVENT_KINDS: CollegeKind[] = ['exam', 'due', 'quiz', 'note', 'admin', 'holiday']
