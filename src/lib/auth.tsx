@@ -61,11 +61,12 @@ function hexToBytes(hex: string) {
 }
 
 async function hashPassword(password: string, salt: Uint8Array) {
+  const saltBuffer = Uint8Array.from(salt)
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, [
     'deriveBits',
   ])
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: 120_000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: saltBuffer, iterations: 120_000, hash: 'SHA-256' },
     key,
     256,
   )

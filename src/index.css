@@ -151,6 +151,9 @@ img { max-width: 100%; display: block; }
     radial-gradient(ellipse at bottom left, rgba(255, 236, 214, 0.5), transparent 40%),
     linear-gradient(180deg, var(--cream), #fbe8ec 40%, #f4d7de);
   min-width: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .stage::before {

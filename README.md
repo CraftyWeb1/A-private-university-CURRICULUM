@@ -8,3 +8,5 @@ npm run dev
 ```
 
 Then open the address Vite prints (usually `http://localhost:5173`).
+
+To open the same app in **Android Studio** or **Xcode**, see [MOBILE.md](MOBILE.md).
