@@ -845,6 +845,19 @@ h3 { font-size: 22px; }
   text-align: left;
 }
 
+.empty-university {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+  margin-bottom: 16px;
+}
+
+.empty-university .muted {
+  margin: 0;
+  flex: 1 1 240px;
+}
+
 .callout-pink {
   background: #fde8ee;
   border: 1px dashed var(--moss);

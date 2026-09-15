@@ -10,6 +10,10 @@ export function spaceKey(userId: string) {
   return `dar-al-ilm-space-${userId}`
 }
 
+function skipOriginalKey(userId: string) {
+  return `dar-al-ilm-skip-original-${userId}`
+}
+
 export const seededStore = (): Store => ({
   checked: {},
   doing: {},
@@ -111,6 +115,29 @@ export function claimLegacy(userId: string) {
   localStorage.setItem(CLAIMED_KEY, userId)
 }
 
+export function skipOriginalNotebook(userId: string) {
+  localStorage.setItem(skipOriginalKey(userId), '1')
+}
+
+export function isBlankStore(store: Store) {
+  return (
+    store.schools.length === 0 &&
+    store.courses.length === 0 &&
+    (store.college?.courses.length ?? 0) === 0 &&
+    store.pages.length === 0 &&
+    store.plannerTasks.length === 0
+  )
+}
+
+export function originalNotebook(): Store {
+  try {
+    if (localStorage.getItem(LEGACY_KEY)) return loadLegacyStore()
+  } catch {
+    /* fall through */
+  }
+  return seededStore()
+}
+
 export function loadLegacyStore(): Store {
   const base = seededStore()
   try {
@@ -129,6 +156,21 @@ export function loadUserStore(userId: string): Store {
     return hydrateStore(JSON.parse(raw) as Partial<Store>, blankStore())
   } catch {
     return blankStore()
+  }
+}
+
+/** Put the original university on this space if it is still empty. Accounts that asked for blank stay empty. */
+export function openUserStore(userId: string): Store {
+  const current = loadUserStore(userId)
+  if (!isBlankStore(current)) return current
+  try {
+    if (localStorage.getItem(skipOriginalKey(userId))) return current
+    const notebook = originalNotebook()
+    saveUserStore(userId, notebook)
+    claimLegacy(userId)
+    return notebook
+  } catch {
+    return current
   }
 }
 

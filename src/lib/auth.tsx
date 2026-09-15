@@ -2,8 +2,9 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import {
   claimLegacy,
   hasUnclaimedLegacy,
-  loadLegacyStore,
+  originalNotebook,
   saveUserStore,
+  skipOriginalNotebook,
 } from './storage'
 
 const USERS_KEY = 'dar-al-ilm-users'
@@ -126,10 +127,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           hash: await hashPassword(password, salt),
           createdAt: new Date().toISOString(),
         }
+        const isFirstAccount = users.length === 0
         writeUsers([...users, account])
-        if (keepNotebook && hasUnclaimedLegacy()) {
-          saveUserStore(account.id, loadLegacyStore())
+        if (keepNotebook || isFirstAccount) {
+          saveUserStore(account.id, originalNotebook())
           claimLegacy(account.id)
+        } else {
+          skipOriginalNotebook(account.id)
         }
         localStorage.setItem(SESSION_KEY, account.id)
         setUser(publicUser(account))

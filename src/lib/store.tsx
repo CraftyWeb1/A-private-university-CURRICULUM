@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TONES, topicKey } from '../data/curriculum'
 import { seedCollege } from '../data/planner'
-import { exportStore, loadUserStore, parseImportedStore, saveUserStore } from './storage'
+import { exportStore, openUserStore, originalNotebook, parseImportedStore, saveUserStore } from './storage'
 import type {
   Block,
   BlockType,
@@ -95,6 +95,7 @@ type StoreApi = {
   updateCollegeEvent: (id: string, patch: Patch<CollegeEvent>) => void
   removeCollegeEvent: (id: string) => void
   resetCollege: () => void
+  restoreOriginalNotebook: () => void
   download: () => void
   upload: (text: string) => void
   schoolById: (id: string) => School | undefined
@@ -122,7 +123,7 @@ export function useStore() {
 }
 
 export function StoreProvider({ userId, children }: { userId: string; children: ReactNode }) {
-  const [store, setStore] = useState<Store>(() => loadUserStore(userId))
+  const [store, setStore] = useState<Store>(() => openUserStore(userId))
 
   useEffect(() => {
     saveUserStore(userId, store)
@@ -617,6 +618,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
           plannerDone: dropKey(s.plannerDone, id),
         })),
       resetCollege: () => setStore((s) => ({ ...s, college: seedCollege() })),
+      restoreOriginalNotebook: () => setStore(originalNotebook()),
       download: () => exportStore(store),
       upload: (text) => setStore(parseImportedStore(text)),
       schoolById,

@@ -17,7 +17,7 @@ const TILE: Record<string, string> = {
 }
 
 export function Home() {
-  const { progress, store, addSchool } = useStore()
+  const { progress, store, addSchool, restoreOriginalNotebook } = useStore()
   const term = TERMS[currentTerm()]
   const today = todayPlan()
   const overall = progress.overall
@@ -108,10 +108,15 @@ export function Home() {
 
       <Rule>The schools</Rule>
       {!store.schools.length ? (
-        <p className="muted">
-          Your university is empty. Add a school — Deen, code, literature, whatever you are
-          actually studying — and build from there.
-        </p>
+        <div className="empty-university">
+          <p className="muted">
+            Your university is empty. Add a school — Deen, code, literature, whatever you are
+            actually studying — and build from there.
+          </p>
+          <button type="button" className="gold" onClick={restoreOriginalNotebook}>
+            Put my original university here
+          </button>
+        </div>
       ) : null}
       <div className="mosaic">
         {store.schools.map((school) => {
