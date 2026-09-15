@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useAuth } from '../lib/auth'
 import { href, type Path } from '../lib/route'
 import { useStore } from '../lib/store'
 
@@ -22,6 +23,7 @@ const STUDIO = [
 export function Layout({ path, children }: { path: Path; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const { store, download, upload, addSchool, addPage, courseById } = useStore()
+  const { user, signOut } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
   const active = path.view
   const schoolId =
@@ -122,6 +124,9 @@ export function Layout({ path, children }: { path: Path; children: ReactNode }) 
               e.target.value = ''
             }}
           />
+          <button className="linkish" type="button" onClick={signOut}>
+            Log out{user?.name ? ` · ${user.name}` : ''}
+          </button>
         </div>
       </aside>
       <div className="stage">

@@ -107,6 +107,12 @@ export function Home() {
       </div>
 
       <Rule>The schools</Rule>
+      {!store.schools.length ? (
+        <p className="muted">
+          Your university is empty. Add a school — Deen, code, literature, whatever you are
+          actually studying — and build from there.
+        </p>
+      ) : null}
       <div className="mosaic">
         {store.schools.map((school) => {
           const p = progress.school(school.id)

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { TONES, topicKey } from '../data/curriculum'
 import { seedCollege } from '../data/planner'
-import { exportStore, loadStore, parseImportedStore, saveStore } from './storage'
+import { exportStore, loadUserStore, parseImportedStore, saveUserStore } from './storage'
 import type {
   Block,
   BlockType,
@@ -121,12 +121,12 @@ export function useStore() {
   return ctx
 }
 
-export function StoreProvider({ children }: { children: ReactNode }) {
-  const [store, setStore] = useState<Store>(() => loadStore())
+export function StoreProvider({ userId, children }: { userId: string; children: ReactNode }) {
+  const [store, setStore] = useState<Store>(() => loadUserStore(userId))
 
   useEffect(() => {
-    saveStore(store)
-  }, [store])
+    saveUserStore(userId, store)
+  }, [userId, store])
 
   const api = useMemo<StoreApi>(() => {
     const schoolById = (id: string) => store.schools.find((s) => s.id === id)

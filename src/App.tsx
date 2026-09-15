@@ -1,6 +1,8 @@
 import { Layout } from './components/Layout'
+import { AuthProvider, useAuth } from './lib/auth'
 import { StoreProvider } from './lib/store'
 import { usePath } from './lib/usePath'
+import { AuthScreen } from './views/Auth'
 import { Home } from './views/Home'
 import { CoursePage, SchoolPage } from './views/School'
 import { SemesterPage, TranscriptPage, WeekPage, YearPage } from './views/Plan'
@@ -37,10 +39,20 @@ function Screen() {
   return <Layout path={path}>{body}</Layout>
 }
 
-export default function App() {
+function Gate() {
+  const { user } = useAuth()
+  if (!user) return <AuthScreen />
   return (
-    <StoreProvider>
+    <StoreProvider key={user.id} userId={user.id}>
       <Screen />
     </StoreProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Gate />
+    </AuthProvider>
   )
 }

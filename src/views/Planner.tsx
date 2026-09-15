@@ -14,7 +14,7 @@ import {
   parseIso,
   hhmm,
   pocketsOn,
-  seedCollege,
+  blankCollege,
   slotsOn,
   startOfMonth,
   startOfWeek,
@@ -188,7 +188,7 @@ export function PlannerPage() {
     removeCollegeEvent,
     resetCollege,
   } = useStore()
-  const college = store.college ?? seedCollege()
+  const college = store.college ?? blankCollege()
   const [mode, setMode] = useState<Mode>('week')
   const [editing, setEditing] = useState(false)
   const [cursor, setCursor] = useState(() => new Date())

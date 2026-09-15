@@ -203,6 +203,15 @@ export function seedCollege(): CollegeState {
   }
 }
 
+export function blankCollege(): CollegeState {
+  return {
+    session: { name: '', college: '', program: '', start: '', end: '' },
+    courses: [],
+    slots: [],
+    events: [],
+  }
+}
+
 export const WEEKDAYS = [
   { n: 1, label: 'Lundi' },
   { n: 2, label: 'Mardi' },

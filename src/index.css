@@ -1332,3 +1332,53 @@ h3 { font-size: 22px; }
   }
   .page { padding: 24px 18px 72px; }
 }
+
+.auth-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(244, 196, 204, 0.55), transparent 42%),
+    radial-gradient(circle at 90% 80%, rgba(201, 149, 122, 0.28), transparent 40%),
+    var(--paper);
+}
+
+.auth-card {
+  width: min(440px, 100%);
+}
+
+.auth-card .arab {
+  display: block;
+  font-family: var(--arab);
+  font-size: 28px;
+  color: var(--moss);
+}
+
+.auth-card .linkish {
+  margin-top: 16px;
+  color: var(--moss);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.auth-keep {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.auth-keep input {
+  width: auto;
+  margin-top: 3px;
+}
+
+.auth-error {
+  margin: 0;
+  color: var(--wine);
+  font-size: 14px;
+}
